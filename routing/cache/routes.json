@@ -1,0 +1,101 @@
+{
+  "groups": [
+    {
+      "name": "any_bird",
+      "labels": [
+        "Bird",
+        "Bird vocalization, bird call, bird song",
+        "Caw",
+        "Chirp, tweet",
+        "Coo",
+        "Hoot",
+        "Squawk"
+      ]
+    },
+    {
+      "name": "any_train",
+      "labels": [
+        "Rail transport",
+        "Railroad car, train wagon",
+        "Subway, metro, underground",
+        "Train",
+        "Train horn",
+        "Train wheels squealing",
+        "Train whistle"
+      ]
+    }
+  ],
+  "ontologies": [
+    "socks"
+  ],
+  "rules": [
+    {
+      "from_model": "sslam",
+      "match": {
+        "group": "any_bird"
+      },
+      "min_score": 0.2,
+      "to_models": [
+        "stub_birdnet"
+      ],
+      "payload": "triggering_window",
+      "max_depth": null
+    },
+    {
+      "from_model": "sslam",
+      "match": {
+        "group": "any_train"
+      },
+      "min_score": 0.2,
+      "to_models": [
+        "stub_trainnet"
+      ],
+      "payload": "triggering_window",
+      "max_depth": null
+    }
+  ],
+  "label_rules": [
+    {
+      "from_model": "sslam",
+      "match": {
+        "group": "any_bird"
+      },
+      "min_score": 0.0,
+      "target_ontology": "socks",
+      "target_label": "biophony"
+    },
+    {
+      "from_model": "sslam",
+      "match": {
+        "labels": [
+          "Speech"
+        ]
+      },
+      "min_score": 0.0,
+      "target_ontology": "socks",
+      "target_label": "anthrophony"
+    },
+    {
+      "from_model": "sslam",
+      "match": {
+        "labels": [
+          "Train horn"
+        ]
+      },
+      "min_score": 0.0,
+      "target_ontology": "socks",
+      "target_label": "trains"
+    },
+    {
+      "from_model": "sslam",
+      "match": {
+        "labels": [
+          "Train horn"
+        ]
+      },
+      "min_score": 0.0,
+      "target_ontology": "socks",
+      "target_label": "anthrophony"
+    }
+  ]
+}

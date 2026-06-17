@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>classpatch.routing &#8212; ClassPatch  documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../_static/alabaster.css?v=27fed22d" />
+    <script src="../../_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for classpatch.routing</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Routing rules and label groups for the classpatch pipeline.</span>
+
+<span class="sd">The :class:`RouteBook` is the user-facing container. It holds:</span>
+
+<span class="sd">- named **label groups** (e.g. ``&quot;any_bird&quot; -&gt; {&quot;Bird&quot;, &quot;Chirp, tweet&quot;, ...}``),</span>
+<span class="sd">- **routing rules** that dispatch matching predictions to another model for</span>
+<span class="sd">  further inference, and</span>
+<span class="sd">- **label routes** that remap matching predictions into a user-defined</span>
+<span class="sd">  *ontology* without running any new inference.</span>
+
+<span class="sd">The executor consumes a :class:`RouteBook` to decide which downstream models</span>
+<span class="sd">get which audio (routing rules) and which synthetic ontology predictions to</span>
+<span class="sd">emit alongside model output (label routes).</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Iterable</span><span class="p">,</span> <span class="n">Literal</span><span class="p">,</span> <span class="n">Mapping</span>
+
+
+<span class="n">PayloadKind</span> <span class="o">=</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;triggering_window&quot;</span><span class="p">,</span> <span class="s2">&quot;whole_file&quot;</span><span class="p">]</span>
+<span class="n">_VALID_PAYLOADS</span><span class="p">:</span> <span class="nb">frozenset</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">({</span><span class="s2">&quot;triggering_window&quot;</span><span class="p">,</span> <span class="s2">&quot;whole_file&quot;</span><span class="p">})</span>
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># Data types</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+
+<div class="viewcode-block" id="LabelGroup">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.LabelGroup">[docs]</a>
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">LabelGroup</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A named set of labels (e.g. ``&quot;any_bird&quot;`` -&gt; {&quot;Bird&quot;, &quot;Chirp, tweet&quot;, ...}).</span>
+
+<span class="sd">    Groups exist so rules can target multi-label patches of an ontology without</span>
+<span class="sd">    re-listing every label. They are stored by name in a :class:`RouteBook`;</span>
+<span class="sd">    rules reference them by name (not by value), so editing a group definition</span>
+<span class="sd">    propagates to every rule that uses it.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">labels</span><span class="p">:</span> <span class="nb">frozenset</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+
+<div class="viewcode-block" id="LabelGroup.to_dict">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.LabelGroup.to_dict">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="s2">&quot;labels&quot;</span><span class="p">:</span> <span class="nb">sorted</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">labels</span><span class="p">)}</span></div>
+
+
+<div class="viewcode-block" id="LabelGroup.from_dict">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.LabelGroup.from_dict">[docs]</a>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">from_dict</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">d</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;LabelGroup&quot;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">d</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">],</span> <span class="n">labels</span><span class="o">=</span><span class="nb">frozenset</span><span class="p">(</span><span class="n">d</span><span class="p">[</span><span class="s2">&quot;labels&quot;</span><span class="p">]))</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="LabelMatch">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.LabelMatch">[docs]</a>
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">LabelMatch</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Predicate used by a :class:`RoutingRule` to select firing predictions.</span>
+
+<span class="sd">    Exactly one of ``labels`` (a literal set) or ``group`` (a name registered</span>
+<span class="sd">    in the owning :class:`RouteBook`) must be set. The group form keeps</span>
+<span class="sd">    serialised rules small and editable in one place.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">labels</span><span class="p">:</span> <span class="nb">frozenset</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">group</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">__post_init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">labels</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">)</span> <span class="o">==</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">group</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;LabelMatch must specify exactly one of `labels` or `group`.&quot;</span>
+            <span class="p">)</span>
+
+<div class="viewcode-block" id="LabelMatch.resolve">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.LabelMatch.resolve">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">resolve</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">groups</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">LabelGroup</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">frozenset</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the effective label set, resolving group references.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">group</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">groups</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">group</span><span class="p">]</span><span class="o">.</span><span class="n">labels</span>
+            <span class="k">except</span> <span class="ne">KeyError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;LabelMatch references unknown group </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">group</span><span class="si">!r}</span><span class="s2">.&quot;</span>
+                <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">exc</span>
+        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">labels</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>  <span class="c1"># narrowing for type checkers</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">labels</span></div>
+
+
+<div class="viewcode-block" id="LabelMatch.to_dict">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.LabelMatch.to_dict">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">group</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;group&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">group</span><span class="p">}</span>
+        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">labels</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;labels&quot;</span><span class="p">:</span> <span class="nb">sorted</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">labels</span><span class="p">)}</span></div>
+
+
+<div class="viewcode-block" id="LabelMatch.from_dict">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.LabelMatch.from_dict">[docs]</a>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">from_dict</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">d</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;LabelMatch&quot;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="s2">&quot;group&quot;</span> <span class="ow">in</span> <span class="n">d</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">group</span><span class="o">=</span><span class="n">d</span><span class="p">[</span><span class="s2">&quot;group&quot;</span><span class="p">])</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">labels</span><span class="o">=</span><span class="nb">frozenset</span><span class="p">(</span><span class="n">d</span><span class="p">[</span><span class="s2">&quot;labels&quot;</span><span class="p">]))</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="RoutingRule">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.RoutingRule">[docs]</a>
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">RoutingRule</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A declarative edge in the model routing graph.</span>
+
+<span class="sd">    &quot;When ``from_model`` emits a prediction whose label is in ``match``</span>
+<span class="sd">    (resolved against the owning route book&#39;s groups) and whose score is at</span>
+<span class="sd">    least ``min_score``, dispatch the triggering segment to every model in</span>
+<span class="sd">    ``to_models`` using ``payload`` to decide what audio to forward.&quot;</span>
+
+<span class="sd">    ``max_depth`` overrides the pipeline-wide depth cap for this rule only;</span>
+<span class="sd">    ``None`` means &quot;use the pipeline default&quot;.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">from_model</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">match</span><span class="p">:</span> <span class="n">LabelMatch</span>
+    <span class="n">min_score</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">to_models</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span>
+    <span class="n">payload</span><span class="p">:</span> <span class="n">PayloadKind</span> <span class="o">=</span> <span class="s2">&quot;triggering_window&quot;</span>
+    <span class="n">max_depth</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">__post_init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">to_models</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;RoutingRule must have at least one target model.&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">payload</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">_VALID_PAYLOADS</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Unknown payload </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">payload</span><span class="si">!r}</span><span class="s2">; expected one of &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">_VALID_PAYLOADS</span><span class="p">)</span><span class="si">}</span><span class="s2">.&quot;</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="mf">0.0</span> <span class="o">&lt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">min_score</span> <span class="o">&lt;=</span> <span class="mf">1.0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;min_score must be in [0, 1]; got </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">min_score</span><span class="si">!r}</span><span class="s2">.&quot;</span>
+            <span class="p">)</span>
+
+<div class="viewcode-block" id="RoutingRule.to_dict">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.RoutingRule.to_dict">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;from_model&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">from_model</span><span class="p">,</span>
+            <span class="s2">&quot;match&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">match</span><span class="o">.</span><span class="n">to_dict</span><span class="p">(),</span>
+            <span class="s2">&quot;min_score&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">min_score</span><span class="p">,</span>
+            <span class="s2">&quot;to_models&quot;</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">to_models</span><span class="p">),</span>
+            <span class="s2">&quot;payload&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">payload</span><span class="p">,</span>
+            <span class="s2">&quot;max_depth&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_depth</span><span class="p">,</span>
+        <span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="RoutingRule.from_dict">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.RoutingRule.from_dict">[docs]</a>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">from_dict</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">d</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;RoutingRule&quot;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+            <span class="n">from_model</span><span class="o">=</span><span class="n">d</span><span class="p">[</span><span class="s2">&quot;from_model&quot;</span><span class="p">],</span>
+            <span class="n">match</span><span class="o">=</span><span class="n">LabelMatch</span><span class="o">.</span><span class="n">from_dict</span><span class="p">(</span><span class="n">d</span><span class="p">[</span><span class="s2">&quot;match&quot;</span><span class="p">]),</span>
+            <span class="n">min_score</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="n">d</span><span class="p">[</span><span class="s2">&quot;min_score&quot;</span><span class="p">]),</span>
+            <span class="n">to_models</span><span class="o">=</span><span class="nb">tuple</span><span class="p">(</span><span class="n">d</span><span class="p">[</span><span class="s2">&quot;to_models&quot;</span><span class="p">]),</span>
+            <span class="n">payload</span><span class="o">=</span><span class="n">d</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;payload&quot;</span><span class="p">,</span> <span class="s2">&quot;triggering_window&quot;</span><span class="p">),</span>
+            <span class="n">max_depth</span><span class="o">=</span><span class="n">d</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;max_depth&quot;</span><span class="p">),</span>
+        <span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="LabelRoute">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.LabelRoute">[docs]</a>
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">LabelRoute</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A pure label-to-label remap (no inference).</span>
+
+<span class="sd">    &quot;When ``from_model`` emits a prediction matching ``match`` with score</span>
+<span class="sd">    at least ``min_score``, emit a synthetic prediction labelled</span>
+<span class="sd">    ``target_label`` under the ontology ``target_ontology`` for the same</span>
+<span class="sd">    time range. The synthetic prediction&#39;s score is the source</span>
+<span class="sd">    prediction&#39;s score.&quot;</span>
+
+<span class="sd">    Multiple :class:`LabelRoute` records that produce the same</span>
+<span class="sd">    ``(target_ontology, target_label, time_range)`` from different source</span>
+<span class="sd">    predictions are collapsed by the executor: a single synthetic</span>
+<span class="sd">    prediction is emitted with score equal to the **max** of the</span>
+<span class="sd">    contributing source scores.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">from_model</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">match</span><span class="p">:</span> <span class="n">LabelMatch</span>
+    <span class="n">min_score</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">target_ontology</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">target_label</span><span class="p">:</span> <span class="nb">str</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">__post_init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">target_ontology</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;LabelRoute.target_ontology must be non-empty.&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">target_label</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;LabelRoute.target_label must be non-empty.&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="mf">0.0</span> <span class="o">&lt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">min_score</span> <span class="o">&lt;=</span> <span class="mf">1.0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;min_score must be in [0, 1]; got </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">min_score</span><span class="si">!r}</span><span class="s2">.&quot;</span>
+            <span class="p">)</span>
+
+<div class="viewcode-block" id="LabelRoute.to_dict">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.LabelRoute.to_dict">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;from_model&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">from_model</span><span class="p">,</span>
+            <span class="s2">&quot;match&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">match</span><span class="o">.</span><span class="n">to_dict</span><span class="p">(),</span>
+            <span class="s2">&quot;min_score&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">min_score</span><span class="p">,</span>
+            <span class="s2">&quot;target_ontology&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">target_ontology</span><span class="p">,</span>
+            <span class="s2">&quot;target_label&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">target_label</span><span class="p">,</span>
+        <span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="LabelRoute.from_dict">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.LabelRoute.from_dict">[docs]</a>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">from_dict</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">d</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;LabelRoute&quot;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+            <span class="n">from_model</span><span class="o">=</span><span class="n">d</span><span class="p">[</span><span class="s2">&quot;from_model&quot;</span><span class="p">],</span>
+            <span class="n">match</span><span class="o">=</span><span class="n">LabelMatch</span><span class="o">.</span><span class="n">from_dict</span><span class="p">(</span><span class="n">d</span><span class="p">[</span><span class="s2">&quot;match&quot;</span><span class="p">]),</span>
+            <span class="n">min_score</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="n">d</span><span class="p">[</span><span class="s2">&quot;min_score&quot;</span><span class="p">]),</span>
+            <span class="n">target_ontology</span><span class="o">=</span><span class="n">d</span><span class="p">[</span><span class="s2">&quot;target_ontology&quot;</span><span class="p">],</span>
+            <span class="n">target_label</span><span class="o">=</span><span class="n">d</span><span class="p">[</span><span class="s2">&quot;target_label&quot;</span><span class="p">],</span>
+        <span class="p">)</span></div>
+</div>
+
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># Fluent builders</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+
+<div class="viewcode-block" id="RouteBuilder">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.RouteBuilder">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">RouteBuilder</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Partial state machine for declaring a single :class:`RoutingRule`.</span>
+
+<span class="sd">    Returned by :meth:`RouteBook.route`. The rule is finalised and added to</span>
+<span class="sd">    the book only when :meth:`to` is called.</span>
+
+<span class="sd">    Example</span>
+<span class="sd">    -------</span>
+<span class="sd">    ::</span>
+
+<span class="sd">        book.route(&quot;sslam&quot;).when(&quot;any_bird&quot;).above(0.2).to(&quot;birdnet&quot;)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">book</span><span class="p">:</span> <span class="s2">&quot;RouteBook&quot;</span><span class="p">,</span> <span class="n">from_model</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_book</span> <span class="o">=</span> <span class="n">book</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_from_model</span> <span class="o">=</span> <span class="n">from_model</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_match</span><span class="p">:</span> <span class="n">LabelMatch</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_min_score</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
+
+<div class="viewcode-block" id="RouteBuilder.when">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.RouteBuilder.when">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">when</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name_or_label</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;RouteBuilder&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Match a registered group by name, or a single literal label.</span>
+
+<span class="sd">        If ``name_or_label`` matches a group name registered on the parent</span>
+<span class="sd">        :class:`RouteBook`, this is treated as a group reference. Otherwise</span>
+<span class="sd">        it is treated as a single literal label. Use :meth:`when_group` or</span>
+<span class="sd">        :meth:`when_label` when you need to disambiguate.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">name_or_label</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_book</span><span class="o">.</span><span class="n">_groups</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_match</span> <span class="o">=</span> <span class="n">LabelMatch</span><span class="p">(</span><span class="n">group</span><span class="o">=</span><span class="n">name_or_label</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_match</span> <span class="o">=</span> <span class="n">LabelMatch</span><span class="p">(</span><span class="n">labels</span><span class="o">=</span><span class="nb">frozenset</span><span class="p">({</span><span class="n">name_or_label</span><span class="p">}))</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+
+<div class="viewcode-block" id="RouteBuilder.when_group">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.RouteBuilder.when_group">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">when_group</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;RouteBuilder&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Match the named group (must already be registered).&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_book</span><span class="o">.</span><span class="n">_groups</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;No group named </span><span class="si">{</span><span class="n">name</span><span class="si">!r}</span><span class="s2"> has been defined.&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_match</span> <span class="o">=</span> <span class="n">LabelMatch</span><span class="p">(</span><span class="n">group</span><span class="o">=</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+
+<div class="viewcode-block" id="RouteBuilder.when_label">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.RouteBuilder.when_label">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">when_label</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">label</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;RouteBuilder&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Match a single literal label.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_match</span> <span class="o">=</span> <span class="n">LabelMatch</span><span class="p">(</span><span class="n">labels</span><span class="o">=</span><span class="nb">frozenset</span><span class="p">({</span><span class="n">label</span><span class="p">}))</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+
+<div class="viewcode-block" id="RouteBuilder.when_any">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.RouteBuilder.when_any">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">when_any</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">labels</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;RouteBuilder&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Match any of a literal set of labels.&quot;&quot;&quot;</span>
+        <span class="n">labels</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">(</span><span class="n">labels</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">labels</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;.when_any() requires at least one label.&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_match</span> <span class="o">=</span> <span class="n">LabelMatch</span><span class="p">(</span><span class="n">labels</span><span class="o">=</span><span class="n">labels</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+
+<div class="viewcode-block" id="RouteBuilder.above">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.RouteBuilder.above">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">above</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">min_score</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;RouteBuilder&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Require prediction score &gt;= ``min_score``.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_min_score</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">min_score</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+
+<div class="viewcode-block" id="RouteBuilder.to">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.RouteBuilder.to">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="o">*</span><span class="n">to_models</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">payload</span><span class="p">:</span> <span class="n">PayloadKind</span> <span class="o">=</span> <span class="s2">&quot;triggering_window&quot;</span><span class="p">,</span>
+        <span class="n">max_depth</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">RoutingRule</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Finalise the rule, append it to the route book, and return it.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_match</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;Cannot finalise a route without .when() / .when_group() / &quot;</span>
+                <span class="s2">&quot;.when_label() / .when_any().&quot;</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">to_models</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;.to() requires at least one target model name.&quot;</span><span class="p">)</span>
+        <span class="n">rule</span> <span class="o">=</span> <span class="n">RoutingRule</span><span class="p">(</span>
+            <span class="n">from_model</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_from_model</span><span class="p">,</span>
+            <span class="n">match</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_match</span><span class="p">,</span>
+            <span class="n">min_score</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_min_score</span><span class="p">,</span>
+            <span class="n">to_models</span><span class="o">=</span><span class="nb">tuple</span><span class="p">(</span><span class="n">to_models</span><span class="p">),</span>
+            <span class="n">payload</span><span class="o">=</span><span class="n">payload</span><span class="p">,</span>
+            <span class="n">max_depth</span><span class="o">=</span><span class="n">max_depth</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_book</span><span class="o">.</span><span class="n">_rules</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">rule</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="RelabelBuilder">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.RelabelBuilder">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">RelabelBuilder</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Partial state machine for declaring a single :class:`LabelRoute`.</span>
+
+<span class="sd">    Returned by :meth:`OntologyBuilder.relabel`. Mirrors :class:`RouteBuilder`</span>
+<span class="sd">    but terminates with :meth:`as_label` instead of ``.to(...)`` — the</span>
+<span class="sd">    distinction makes it obvious at the call site whether a rule fans out</span>
+<span class="sd">    to another *model* (inference) or to another *label* (remap).</span>
+
+<span class="sd">    Example</span>
+<span class="sd">    -------</span>
+<span class="sd">    ::</span>
+
+<span class="sd">        ecology = book.ontology(&quot;ecology&quot;)</span>
+<span class="sd">        ecology.relabel(&quot;sslam&quot;).when(&quot;any_bird&quot;).above(0.20).as_label(&quot;bird_activity&quot;)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">book</span><span class="p">:</span> <span class="s2">&quot;RouteBook&quot;</span><span class="p">,</span>
+        <span class="n">target_ontology</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">from_model</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_book</span> <span class="o">=</span> <span class="n">book</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_target_ontology</span> <span class="o">=</span> <span class="n">target_ontology</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_from_model</span> <span class="o">=</span> <span class="n">from_model</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_match</span><span class="p">:</span> <span class="n">LabelMatch</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_min_score</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
+
+<div class="viewcode-block" id="RelabelBuilder.when">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.RelabelBuilder.when">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">when</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name_or_label</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;RelabelBuilder&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Match a registered group by name, or a single literal label.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">name_or_label</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_book</span><span class="o">.</span><span class="n">_groups</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_match</span> <span class="o">=</span> <span class="n">LabelMatch</span><span class="p">(</span><span class="n">group</span><span class="o">=</span><span class="n">name_or_label</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_match</span> <span class="o">=</span> <span class="n">LabelMatch</span><span class="p">(</span><span class="n">labels</span><span class="o">=</span><span class="nb">frozenset</span><span class="p">({</span><span class="n">name_or_label</span><span class="p">}))</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+
+<div class="viewcode-block" id="RelabelBuilder.when_group">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.RelabelBuilder.when_group">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">when_group</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;RelabelBuilder&quot;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_book</span><span class="o">.</span><span class="n">_groups</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;No group named </span><span class="si">{</span><span class="n">name</span><span class="si">!r}</span><span class="s2"> has been defined.&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_match</span> <span class="o">=</span> <span class="n">LabelMatch</span><span class="p">(</span><span class="n">group</span><span class="o">=</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+
+<div class="viewcode-block" id="RelabelBuilder.when_label">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.RelabelBuilder.when_label">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">when_label</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">label</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;RelabelBuilder&quot;</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_match</span> <span class="o">=</span> <span class="n">LabelMatch</span><span class="p">(</span><span class="n">labels</span><span class="o">=</span><span class="nb">frozenset</span><span class="p">({</span><span class="n">label</span><span class="p">}))</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+
+<div class="viewcode-block" id="RelabelBuilder.when_any">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.RelabelBuilder.when_any">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">when_any</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">labels</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;RelabelBuilder&quot;</span><span class="p">:</span>
+        <span class="n">labels</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">(</span><span class="n">labels</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">labels</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;.when_any() requires at least one label.&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_match</span> <span class="o">=</span> <span class="n">LabelMatch</span><span class="p">(</span><span class="n">labels</span><span class="o">=</span><span class="n">labels</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+
+<div class="viewcode-block" id="RelabelBuilder.above">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.RelabelBuilder.above">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">above</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">min_score</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;RelabelBuilder&quot;</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_min_score</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">min_score</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+
+<div class="viewcode-block" id="RelabelBuilder.as_label">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.RelabelBuilder.as_label">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">as_label</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">target_label</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">LabelRoute</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Finalise the label route and append it to the route book.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_match</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;Cannot finalise a relabel without .when() / .when_group() / &quot;</span>
+                <span class="s2">&quot;.when_label() / .when_any().&quot;</span>
+            <span class="p">)</span>
+        <span class="n">route</span> <span class="o">=</span> <span class="n">LabelRoute</span><span class="p">(</span>
+            <span class="n">from_model</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_from_model</span><span class="p">,</span>
+            <span class="n">match</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_match</span><span class="p">,</span>
+            <span class="n">min_score</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_min_score</span><span class="p">,</span>
+            <span class="n">target_ontology</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_target_ontology</span><span class="p">,</span>
+            <span class="n">target_label</span><span class="o">=</span><span class="n">target_label</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_book</span><span class="o">.</span><span class="n">_label_rules</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">route</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">route</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="OntologyBuilder">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.OntologyBuilder">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">OntologyBuilder</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Namespace handle for declaring label routes that target one ontology.</span>
+
+<span class="sd">    Returned by :meth:`RouteBook.ontology`. Lets multiple relabel rules</span>
+<span class="sd">    sourced from different models all share the same ``target_ontology``</span>
+<span class="sd">    visually:</span>
+
+<span class="sd">    ::</span>
+
+<span class="sd">        ecology = book.ontology(&quot;ecology&quot;)</span>
+<span class="sd">        ecology.relabel(&quot;sslam&quot;).when(&quot;any_bird&quot;).above(0.2).as_label(&quot;bird_activity&quot;)</span>
+<span class="sd">        ecology.relabel(&quot;sslam&quot;).when_label(&quot;Speech&quot;).above(0.4).as_label(&quot;human_voice&quot;)</span>
+<span class="sd">        ecology.relabel(&quot;birdnet&quot;).when_label(&quot;Northern Cardinal&quot;).above(0.5).as_label(&quot;cardinal&quot;)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">book</span><span class="p">:</span> <span class="s2">&quot;RouteBook&quot;</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_book</span> <span class="o">=</span> <span class="n">book</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">name</span>
+
+<div class="viewcode-block" id="OntologyBuilder.relabel">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.OntologyBuilder.relabel">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">relabel</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">from_model</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">RelabelBuilder</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Start declaring a label route from ``from_model`` into this ontology.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">RelabelBuilder</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_book</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">from_model</span><span class="p">)</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">n</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_book</span><span class="o">.</span><span class="n">_label_rules</span> <span class="k">if</span> <span class="n">r</span><span class="o">.</span><span class="n">target_ontology</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;OntologyBuilder(name=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">!r}</span><span class="s2">, label_rules=</span><span class="si">{</span><span class="n">n</span><span class="si">}</span><span class="s2">)&quot;</span></div>
+
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># RouteBook</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+
+<div class="viewcode-block" id="RouteBook">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.RouteBook">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">RouteBook</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Container of label groups, ontologies, routing rules, and label routes.</span>
+
+<span class="sd">    Designed to outlive any single pipeline instance: define routes once,</span>
+<span class="sd">    save with :meth:`save`, reload across sessions with :meth:`load`, and</span>
+<span class="sd">    pass the same book to whichever pipeline executor consumes it.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_groups</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">LabelGroup</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_ontologies</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_rules</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">RoutingRule</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_label_rules</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">LabelRoute</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="c1"># ---- groups --------------------------------------------------------</span>
+
+<div class="viewcode-block" id="RouteBook.define_group">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.RouteBook.define_group">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">define_group</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">labels</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">overwrite</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">LabelGroup</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Register a named label group.</span>
+
+<span class="sd">        Subsequent rules can reference it via :meth:`RouteBuilder.when` or</span>
+<span class="sd">        :meth:`RouteBuilder.when_group`. Pass ``overwrite=True`` to replace</span>
+<span class="sd">        an existing group of the same name (rules that reference it pick up</span>
+<span class="sd">        the new membership automatically because they store the name).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_groups</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">overwrite</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Group </span><span class="si">{</span><span class="n">name</span><span class="si">!r}</span><span class="s2"> already exists; pass overwrite=True to replace.&quot;</span>
+            <span class="p">)</span>
+        <span class="n">group</span> <span class="o">=</span> <span class="n">LabelGroup</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="nb">frozenset</span><span class="p">(</span><span class="n">labels</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_groups</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">group</span>
+        <span class="k">return</span> <span class="n">group</span></div>
+
+
+<div class="viewcode-block" id="RouteBook.group">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.RouteBook.group">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">group</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">LabelGroup</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_groups</span><span class="p">[</span><span class="n">name</span><span class="p">]</span></div>
+
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">groups</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">LabelGroup</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_groups</span>
+
+    <span class="c1"># ---- ontologies ----------------------------------------------------</span>
+
+<div class="viewcode-block" id="RouteBook.define_ontology">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.RouteBook.define_ontology">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">define_ontology</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;OntologyBuilder&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Register a custom ontology name.</span>
+
+<span class="sd">        Label routes target a named ontology; predictions remapped under</span>
+<span class="sd">        that name appear as a synthetic child node in the result tree with</span>
+<span class="sd">        ``model == name``. Calling this method twice with the same name is</span>
+<span class="sd">        a no-op.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">name</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Ontology name must be non-empty.&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_ontologies</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">OntologyBuilder</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="RouteBook.ontology">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.RouteBook.ontology">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">ontology</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;OntologyBuilder&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return a builder for the named ontology, defining it if necessary.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_ontologies</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">define_ontology</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">OntologyBuilder</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span></div>
+
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">ontologies</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">frozenset</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="nb">frozenset</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_ontologies</span><span class="p">)</span>
+
+    <span class="c1"># ---- rules ---------------------------------------------------------</span>
+
+<div class="viewcode-block" id="RouteBook.route">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.RouteBook.route">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">route</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">from_model</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">RouteBuilder</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Start declaring a model route whose source is ``from_model``.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">RouteBuilder</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">from_model</span><span class="p">)</span></div>
+
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">rules</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">RoutingRule</span><span class="p">,</span> <span class="o">...</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_rules</span><span class="p">)</span>
+
+<div class="viewcode-block" id="RouteBook.rules_for">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.RouteBook.rules_for">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">rules_for</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">from_model</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">RoutingRule</span><span class="p">,</span> <span class="o">...</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return all model routes whose source is ``from_model``.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_rules</span> <span class="k">if</span> <span class="n">r</span><span class="o">.</span><span class="n">from_model</span> <span class="o">==</span> <span class="n">from_model</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="RouteBook.clear_rules">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.RouteBook.clear_rules">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">clear_rules</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_rules</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="RouteBook.remove_rule">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.RouteBook.remove_rule">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">remove_rule</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">rule</span><span class="p">:</span> <span class="n">RoutingRule</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_rules</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span></div>
+
+
+    <span class="c1"># ---- label rules ---------------------------------------------------</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">label_rules</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">LabelRoute</span><span class="p">,</span> <span class="o">...</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_label_rules</span><span class="p">)</span>
+
+<div class="viewcode-block" id="RouteBook.label_rules_for">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.RouteBook.label_rules_for">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">label_rules_for</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">from_model</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">LabelRoute</span><span class="p">,</span> <span class="o">...</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return all label routes whose source is ``from_model``.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_label_rules</span> <span class="k">if</span> <span class="n">r</span><span class="o">.</span><span class="n">from_model</span> <span class="o">==</span> <span class="n">from_model</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="RouteBook.clear_label_rules">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.RouteBook.clear_label_rules">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">clear_label_rules</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_label_rules</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="RouteBook.remove_label_rule">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.RouteBook.remove_label_rule">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">remove_label_rule</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">route</span><span class="p">:</span> <span class="n">LabelRoute</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_label_rules</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">route</span><span class="p">)</span></div>
+
+
+    <span class="c1"># ---- persistence ---------------------------------------------------</span>
+
+<div class="viewcode-block" id="RouteBook.to_dict">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.RouteBook.to_dict">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;groups&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">g</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span> <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_groups</span><span class="o">.</span><span class="n">values</span><span class="p">()],</span>
+            <span class="s2">&quot;ontologies&quot;</span><span class="p">:</span> <span class="nb">sorted</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_ontologies</span><span class="p">),</span>
+            <span class="s2">&quot;rules&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">r</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_rules</span><span class="p">],</span>
+            <span class="s2">&quot;label_rules&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">r</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_label_rules</span><span class="p">],</span>
+        <span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="RouteBook.from_dict">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.RouteBook.from_dict">[docs]</a>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">from_dict</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">d</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;RouteBook&quot;</span><span class="p">:</span>
+        <span class="n">book</span> <span class="o">=</span> <span class="bp">cls</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">d</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;groups&quot;</span><span class="p">,</span> <span class="p">[]):</span>
+            <span class="n">group</span> <span class="o">=</span> <span class="n">LabelGroup</span><span class="o">.</span><span class="n">from_dict</span><span class="p">(</span><span class="n">g</span><span class="p">)</span>
+            <span class="n">book</span><span class="o">.</span><span class="n">_groups</span><span class="p">[</span><span class="n">group</span><span class="o">.</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">group</span>
+        <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">d</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;ontologies&quot;</span><span class="p">,</span> <span class="p">[]):</span>
+            <span class="n">book</span><span class="o">.</span><span class="n">_ontologies</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">d</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;rules&quot;</span><span class="p">,</span> <span class="p">[]):</span>
+            <span class="n">book</span><span class="o">.</span><span class="n">_rules</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">RoutingRule</span><span class="o">.</span><span class="n">from_dict</span><span class="p">(</span><span class="n">r</span><span class="p">))</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">d</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;label_rules&quot;</span><span class="p">,</span> <span class="p">[]):</span>
+            <span class="n">route</span> <span class="o">=</span> <span class="n">LabelRoute</span><span class="o">.</span><span class="n">from_dict</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+            <span class="n">book</span><span class="o">.</span><span class="n">_ontologies</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">route</span><span class="o">.</span><span class="n">target_ontology</span><span class="p">)</span>
+            <span class="n">book</span><span class="o">.</span><span class="n">_label_rules</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">route</span><span class="p">)</span>
+        <span class="n">book</span><span class="o">.</span><span class="n">_validate_references</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">book</span></div>
+
+
+<div class="viewcode-block" id="RouteBook.save">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.RouteBook.save">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">indent</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Persist the route book to ``path`` (JSON). Returns the resolved path.&quot;&quot;&quot;</span>
+        <span class="n">path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+        <span class="n">path</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">payload</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">to_dict</span><span class="p">(),</span> <span class="n">indent</span><span class="o">=</span><span class="n">indent</span><span class="p">,</span> <span class="n">sort_keys</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="n">path</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="n">payload</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">path</span></div>
+
+
+<div class="viewcode-block" id="RouteBook.load">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.routing.RouteBook.load">[docs]</a>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">load</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;RouteBook&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Load a route book previously written by :meth:`save`.&quot;&quot;&quot;</span>
+        <span class="n">path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+        <span class="k">with</span> <span class="n">path</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="s2">&quot;r&quot;</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">cls</span><span class="o">.</span><span class="n">from_dict</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">f</span><span class="p">))</span></div>
+
+
+    <span class="c1"># ---- internals -----------------------------------------------------</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_validate_references</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">missing_groups</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span>
+            <span class="p">{</span>
+                <span class="n">r</span><span class="o">.</span><span class="n">match</span><span class="o">.</span><span class="n">group</span>
+                <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="p">[</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">_rules</span><span class="p">,</span> <span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">_label_rules</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">r</span><span class="o">.</span><span class="n">match</span><span class="o">.</span><span class="n">group</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">r</span><span class="o">.</span><span class="n">match</span><span class="o">.</span><span class="n">group</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_groups</span>
+            <span class="p">}</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">missing_groups</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Rules reference undefined group(s): </span><span class="si">{</span><span class="n">missing_groups</span><span class="si">}</span><span class="s2">.&quot;</span>
+            <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;RouteBook(groups=</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_groups</span><span class="p">)</span><span class="si">}</span><span class="s2">, &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;ontologies=</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_ontologies</span><span class="p">)</span><span class="si">}</span><span class="s2">, &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;rules=</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_rules</span><span class="p">)</span><span class="si">}</span><span class="s2">, &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;label_rules=</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_label_rules</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span>
+        <span class="p">)</span></div>
+
+
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s2">&quot;LabelGroup&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;LabelMatch&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;LabelRoute&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;OntologyBuilder&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;PayloadKind&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;RelabelBuilder&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;RouteBook&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;RouteBuilder&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;RoutingRule&quot;</span><span class="p">,</span>
+<span class="p">]</span>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">ClassPatch</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2026, Will.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

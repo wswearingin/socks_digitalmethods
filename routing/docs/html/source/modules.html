@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>classpatch &#8212; ClassPatch  documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=27fed22d" />
+    <script src="../_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="classpatch">
+<h1>classpatch<a class="headerlink" href="#classpatch" title="Link to this heading">¶</a></h1>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="classpatch.html">classpatch package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="classpatch.html#subpackages">Subpackages</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.models.html">classpatch.models package</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.models.html#submodules">Submodules</a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.models.html#module-classpatch.models.audioset_vocab">classpatch.models.audioset_vocab module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.models.html#module-classpatch.models.sslam">classpatch.models.sslam module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.models.html#module-classpatch.models.stub">classpatch.models.stub module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.models.html#module-classpatch.models">Module contents</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="classpatch.html#submodules">Submodules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classpatch.html#module-classpatch.base">classpatch.base module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.base.AudioClassifier"><code class="docutils literal notranslate"><span class="pre">AudioClassifier</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.base.AudioClassifier.classify"><code class="docutils literal notranslate"><span class="pre">AudioClassifier.classify()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.base.AudioClassifier.labels"><code class="docutils literal notranslate"><span class="pre">AudioClassifier.labels</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.base.AudioClassifier.load"><code class="docutils literal notranslate"><span class="pre">AudioClassifier.load()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.base.AudioClassifier.name"><code class="docutils literal notranslate"><span class="pre">AudioClassifier.name</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.base.AudioClassifier.target_sample_rate"><code class="docutils literal notranslate"><span class="pre">AudioClassifier.target_sample_rate</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.base.AudioClassifier.unload"><code class="docutils literal notranslate"><span class="pre">AudioClassifier.unload()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.base.LineageStep"><code class="docutils literal notranslate"><span class="pre">LineageStep</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.base.LineageStep.model"><code class="docutils literal notranslate"><span class="pre">LineageStep.model</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.base.LineageStep.triggering_label"><code class="docutils literal notranslate"><span class="pre">LineageStep.triggering_label</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.base.LineageStep.triggering_score"><code class="docutils literal notranslate"><span class="pre">LineageStep.triggering_score</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.base.Prediction"><code class="docutils literal notranslate"><span class="pre">Prediction</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.base.Prediction.label"><code class="docutils literal notranslate"><span class="pre">Prediction.label</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.base.Prediction.score"><code class="docutils literal notranslate"><span class="pre">Prediction.score</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.base.Prediction.time_range"><code class="docutils literal notranslate"><span class="pre">Prediction.time_range</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.base.Segment"><code class="docutils literal notranslate"><span class="pre">Segment</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.base.Segment.duration"><code class="docutils literal notranslate"><span class="pre">Segment.duration</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.base.Segment.lineage"><code class="docutils literal notranslate"><span class="pre">Segment.lineage</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.base.Segment.num_samples"><code class="docutils literal notranslate"><span class="pre">Segment.num_samples</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.base.Segment.sample_rate"><code class="docutils literal notranslate"><span class="pre">Segment.sample_rate</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.base.Segment.source_path"><code class="docutils literal notranslate"><span class="pre">Segment.source_path</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.base.Segment.time_range"><code class="docutils literal notranslate"><span class="pre">Segment.time_range</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.base.Segment.waveform"><code class="docutils literal notranslate"><span class="pre">Segment.waveform</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.base.Segment.with_lineage"><code class="docutils literal notranslate"><span class="pre">Segment.with_lineage()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.base.get_device"><code class="docutils literal notranslate"><span class="pre">get_device()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.base.list_audio_files"><code class="docutils literal notranslate"><span class="pre">list_audio_files()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.base.load_mono_waveform"><code class="docutils literal notranslate"><span class="pre">load_mono_waveform()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.base.resample_segment"><code class="docutils literal notranslate"><span class="pre">resample_segment()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.base.segment_from_file"><code class="docutils literal notranslate"><span class="pre">segment_from_file()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="classpatch.html#module-classpatch.pipeline">classpatch.pipeline module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.pipeline.Pipeline"><code class="docutils literal notranslate"><span class="pre">Pipeline</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.pipeline.Pipeline.models"><code class="docutils literal notranslate"><span class="pre">Pipeline.models</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.pipeline.Pipeline.register"><code class="docutils literal notranslate"><span class="pre">Pipeline.register()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.pipeline.Pipeline.run"><code class="docutils literal notranslate"><span class="pre">Pipeline.run()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.pipeline.Pipeline.run_many"><code class="docutils literal notranslate"><span class="pre">Pipeline.run_many()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.pipeline.PipelineError"><code class="docutils literal notranslate"><span class="pre">PipelineError</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="classpatch.html#module-classpatch.results">classpatch.results module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.results.ResultNode"><code class="docutils literal notranslate"><span class="pre">ResultNode</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.results.ResultNode.add_child"><code class="docutils literal notranslate"><span class="pre">ResultNode.add_child()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.results.ResultNode.add_trigger"><code class="docutils literal notranslate"><span class="pre">ResultNode.add_trigger()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.results.ResultNode.children"><code class="docutils literal notranslate"><span class="pre">ResultNode.children</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.results.ResultNode.from_dict"><code class="docutils literal notranslate"><span class="pre">ResultNode.from_dict()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.results.ResultNode.iter_rows"><code class="docutils literal notranslate"><span class="pre">ResultNode.iter_rows()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.results.ResultNode.load"><code class="docutils literal notranslate"><span class="pre">ResultNode.load()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.results.ResultNode.model"><code class="docutils literal notranslate"><span class="pre">ResultNode.model</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.results.ResultNode.predictions"><code class="docutils literal notranslate"><span class="pre">ResultNode.predictions</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.results.ResultNode.predictions_by_chunk"><code class="docutils literal notranslate"><span class="pre">ResultNode.predictions_by_chunk()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.results.ResultNode.save"><code class="docutils literal notranslate"><span class="pre">ResultNode.save()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.results.ResultNode.segment_time_range"><code class="docutils literal notranslate"><span class="pre">ResultNode.segment_time_range</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.results.ResultNode.source_path"><code class="docutils literal notranslate"><span class="pre">ResultNode.source_path</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.results.ResultNode.to_dict"><code class="docutils literal notranslate"><span class="pre">ResultNode.to_dict()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.results.ResultNode.triggers"><code class="docutils literal notranslate"><span class="pre">ResultNode.triggers</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.results.ResultNode.walk"><code class="docutils literal notranslate"><span class="pre">ResultNode.walk()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.results.ResultRow"><code class="docutils literal notranslate"><span class="pre">ResultRow</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.results.ResultRow.depth"><code class="docutils literal notranslate"><span class="pre">ResultRow.depth</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.results.ResultRow.end_sec"><code class="docutils literal notranslate"><span class="pre">ResultRow.end_sec</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.results.ResultRow.label"><code class="docutils literal notranslate"><span class="pre">ResultRow.label</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.results.ResultRow.model"><code class="docutils literal notranslate"><span class="pre">ResultRow.model</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.results.ResultRow.score"><code class="docutils literal notranslate"><span class="pre">ResultRow.score</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.results.ResultRow.source_path"><code class="docutils literal notranslate"><span class="pre">ResultRow.source_path</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.results.ResultRow.start_sec"><code class="docutils literal notranslate"><span class="pre">ResultRow.start_sec</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.results.Trigger"><code class="docutils literal notranslate"><span class="pre">Trigger</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.results.Trigger.from_dict"><code class="docutils literal notranslate"><span class="pre">Trigger.from_dict()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.results.Trigger.from_model"><code class="docutils literal notranslate"><span class="pre">Trigger.from_model</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.results.Trigger.label"><code class="docutils literal notranslate"><span class="pre">Trigger.label</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.results.Trigger.score"><code class="docutils literal notranslate"><span class="pre">Trigger.score</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.results.Trigger.time_range"><code class="docutils literal notranslate"><span class="pre">Trigger.time_range</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.results.Trigger.to_dict"><code class="docutils literal notranslate"><span class="pre">Trigger.to_dict()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.results.render"><code class="docutils literal notranslate"><span class="pre">render()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="classpatch.html#module-classpatch.routing">classpatch.routing module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.routing.LabelGroup"><code class="docutils literal notranslate"><span class="pre">LabelGroup</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.LabelGroup.from_dict"><code class="docutils literal notranslate"><span class="pre">LabelGroup.from_dict()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.LabelGroup.labels"><code class="docutils literal notranslate"><span class="pre">LabelGroup.labels</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.LabelGroup.name"><code class="docutils literal notranslate"><span class="pre">LabelGroup.name</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.LabelGroup.to_dict"><code class="docutils literal notranslate"><span class="pre">LabelGroup.to_dict()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.routing.LabelMatch"><code class="docutils literal notranslate"><span class="pre">LabelMatch</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.LabelMatch.from_dict"><code class="docutils literal notranslate"><span class="pre">LabelMatch.from_dict()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.LabelMatch.group"><code class="docutils literal notranslate"><span class="pre">LabelMatch.group</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.LabelMatch.labels"><code class="docutils literal notranslate"><span class="pre">LabelMatch.labels</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.LabelMatch.resolve"><code class="docutils literal notranslate"><span class="pre">LabelMatch.resolve()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.LabelMatch.to_dict"><code class="docutils literal notranslate"><span class="pre">LabelMatch.to_dict()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.routing.LabelRoute"><code class="docutils literal notranslate"><span class="pre">LabelRoute</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.LabelRoute.from_dict"><code class="docutils literal notranslate"><span class="pre">LabelRoute.from_dict()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.LabelRoute.from_model"><code class="docutils literal notranslate"><span class="pre">LabelRoute.from_model</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.LabelRoute.match"><code class="docutils literal notranslate"><span class="pre">LabelRoute.match</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.LabelRoute.min_score"><code class="docutils literal notranslate"><span class="pre">LabelRoute.min_score</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.LabelRoute.target_label"><code class="docutils literal notranslate"><span class="pre">LabelRoute.target_label</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.LabelRoute.target_ontology"><code class="docutils literal notranslate"><span class="pre">LabelRoute.target_ontology</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.LabelRoute.to_dict"><code class="docutils literal notranslate"><span class="pre">LabelRoute.to_dict()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.routing.OntologyBuilder"><code class="docutils literal notranslate"><span class="pre">OntologyBuilder</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.OntologyBuilder.relabel"><code class="docutils literal notranslate"><span class="pre">OntologyBuilder.relabel()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.routing.RelabelBuilder"><code class="docutils literal notranslate"><span class="pre">RelabelBuilder</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.RelabelBuilder.above"><code class="docutils literal notranslate"><span class="pre">RelabelBuilder.above()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.RelabelBuilder.as_label"><code class="docutils literal notranslate"><span class="pre">RelabelBuilder.as_label()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.RelabelBuilder.when"><code class="docutils literal notranslate"><span class="pre">RelabelBuilder.when()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.RelabelBuilder.when_any"><code class="docutils literal notranslate"><span class="pre">RelabelBuilder.when_any()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.RelabelBuilder.when_group"><code class="docutils literal notranslate"><span class="pre">RelabelBuilder.when_group()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.RelabelBuilder.when_label"><code class="docutils literal notranslate"><span class="pre">RelabelBuilder.when_label()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.routing.RouteBook"><code class="docutils literal notranslate"><span class="pre">RouteBook</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.RouteBook.clear_label_rules"><code class="docutils literal notranslate"><span class="pre">RouteBook.clear_label_rules()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.RouteBook.clear_rules"><code class="docutils literal notranslate"><span class="pre">RouteBook.clear_rules()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.RouteBook.define_group"><code class="docutils literal notranslate"><span class="pre">RouteBook.define_group()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.RouteBook.define_ontology"><code class="docutils literal notranslate"><span class="pre">RouteBook.define_ontology()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.RouteBook.from_dict"><code class="docutils literal notranslate"><span class="pre">RouteBook.from_dict()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.RouteBook.group"><code class="docutils literal notranslate"><span class="pre">RouteBook.group()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.RouteBook.groups"><code class="docutils literal notranslate"><span class="pre">RouteBook.groups</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.RouteBook.label_rules"><code class="docutils literal notranslate"><span class="pre">RouteBook.label_rules</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.RouteBook.label_rules_for"><code class="docutils literal notranslate"><span class="pre">RouteBook.label_rules_for()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.RouteBook.load"><code class="docutils literal notranslate"><span class="pre">RouteBook.load()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.RouteBook.ontologies"><code class="docutils literal notranslate"><span class="pre">RouteBook.ontologies</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.RouteBook.ontology"><code class="docutils literal notranslate"><span class="pre">RouteBook.ontology()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.RouteBook.remove_label_rule"><code class="docutils literal notranslate"><span class="pre">RouteBook.remove_label_rule()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.RouteBook.remove_rule"><code class="docutils literal notranslate"><span class="pre">RouteBook.remove_rule()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.RouteBook.route"><code class="docutils literal notranslate"><span class="pre">RouteBook.route()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.RouteBook.rules"><code class="docutils literal notranslate"><span class="pre">RouteBook.rules</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.RouteBook.rules_for"><code class="docutils literal notranslate"><span class="pre">RouteBook.rules_for()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.RouteBook.save"><code class="docutils literal notranslate"><span class="pre">RouteBook.save()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.RouteBook.to_dict"><code class="docutils literal notranslate"><span class="pre">RouteBook.to_dict()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.routing.RouteBuilder"><code class="docutils literal notranslate"><span class="pre">RouteBuilder</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.RouteBuilder.above"><code class="docutils literal notranslate"><span class="pre">RouteBuilder.above()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.RouteBuilder.to"><code class="docutils literal notranslate"><span class="pre">RouteBuilder.to()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.RouteBuilder.when"><code class="docutils literal notranslate"><span class="pre">RouteBuilder.when()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.RouteBuilder.when_any"><code class="docutils literal notranslate"><span class="pre">RouteBuilder.when_any()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.RouteBuilder.when_group"><code class="docutils literal notranslate"><span class="pre">RouteBuilder.when_group()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.RouteBuilder.when_label"><code class="docutils literal notranslate"><span class="pre">RouteBuilder.when_label()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.routing.RoutingRule"><code class="docutils literal notranslate"><span class="pre">RoutingRule</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.RoutingRule.from_dict"><code class="docutils literal notranslate"><span class="pre">RoutingRule.from_dict()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.RoutingRule.from_model"><code class="docutils literal notranslate"><span class="pre">RoutingRule.from_model</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.RoutingRule.match"><code class="docutils literal notranslate"><span class="pre">RoutingRule.match</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.RoutingRule.max_depth"><code class="docutils literal notranslate"><span class="pre">RoutingRule.max_depth</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.RoutingRule.min_score"><code class="docutils literal notranslate"><span class="pre">RoutingRule.min_score</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.RoutingRule.payload"><code class="docutils literal notranslate"><span class="pre">RoutingRule.payload</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.RoutingRule.to_dict"><code class="docutils literal notranslate"><span class="pre">RoutingRule.to_dict()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.routing.RoutingRule.to_models"><code class="docutils literal notranslate"><span class="pre">RoutingRule.to_models</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="classpatch.html#module-classpatch.survey">classpatch.survey module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#counting-model">Counting model</a></li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.survey.Detection"><code class="docutils literal notranslate"><span class="pre">Detection</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.survey.Detection.duration_sec"><code class="docutils literal notranslate"><span class="pre">Detection.duration_sec</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.survey.Detection.end_sec"><code class="docutils literal notranslate"><span class="pre">Detection.end_sec</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.survey.Detection.label"><code class="docutils literal notranslate"><span class="pre">Detection.label</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.survey.Detection.model"><code class="docutils literal notranslate"><span class="pre">Detection.model</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.survey.Detection.score"><code class="docutils literal notranslate"><span class="pre">Detection.score</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.survey.Detection.source_path"><code class="docutils literal notranslate"><span class="pre">Detection.source_path</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.survey.Detection.start_sec"><code class="docutils literal notranslate"><span class="pre">Detection.start_sec</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.survey.Event"><code class="docutils literal notranslate"><span class="pre">Event</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.survey.Event.detection_count"><code class="docutils literal notranslate"><span class="pre">Event.detection_count</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.survey.Event.duration_sec"><code class="docutils literal notranslate"><span class="pre">Event.duration_sec</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.survey.Event.end_sec"><code class="docutils literal notranslate"><span class="pre">Event.end_sec</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.survey.Event.label"><code class="docutils literal notranslate"><span class="pre">Event.label</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.survey.Event.max_score"><code class="docutils literal notranslate"><span class="pre">Event.max_score</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.survey.Event.mean_score"><code class="docutils literal notranslate"><span class="pre">Event.mean_score</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.survey.Event.model"><code class="docutils literal notranslate"><span class="pre">Event.model</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.survey.Event.source_path"><code class="docutils literal notranslate"><span class="pre">Event.source_path</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.survey.Event.start_sec"><code class="docutils literal notranslate"><span class="pre">Event.start_sec</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.survey.LabelTally"><code class="docutils literal notranslate"><span class="pre">LabelTally</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.survey.LabelTally.detection_count"><code class="docutils literal notranslate"><span class="pre">LabelTally.detection_count</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.survey.LabelTally.event_count"><code class="docutils literal notranslate"><span class="pre">LabelTally.event_count</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.survey.LabelTally.first_sec"><code class="docutils literal notranslate"><span class="pre">LabelTally.first_sec</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.survey.LabelTally.label"><code class="docutils literal notranslate"><span class="pre">LabelTally.label</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.survey.LabelTally.last_sec"><code class="docutils literal notranslate"><span class="pre">LabelTally.last_sec</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.survey.LabelTally.max_score"><code class="docutils literal notranslate"><span class="pre">LabelTally.max_score</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.survey.LabelTally.mean_score"><code class="docutils literal notranslate"><span class="pre">LabelTally.mean_score</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.survey.LabelTally.model"><code class="docutils literal notranslate"><span class="pre">LabelTally.model</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.survey.LabelTally.source_path"><code class="docutils literal notranslate"><span class="pre">LabelTally.source_path</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.survey.LabelTally.to_record"><code class="docutils literal notranslate"><span class="pre">LabelTally.to_record()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.survey.LabelTally.total_duration_sec"><code class="docutils literal notranslate"><span class="pre">LabelTally.total_duration_sec</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.survey.Survey"><code class="docutils literal notranslate"><span class="pre">Survey</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.survey.Survey.detections"><code class="docutils literal notranslate"><span class="pre">Survey.detections</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.survey.Survey.events"><code class="docutils literal notranslate"><span class="pre">Survey.events</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.survey.Survey.for_file"><code class="docutils literal notranslate"><span class="pre">Survey.for_file()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.survey.Survey.for_model"><code class="docutils literal notranslate"><span class="pre">Survey.for_model()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.survey.Survey.merge_gap_sec"><code class="docutils literal notranslate"><span class="pre">Survey.merge_gap_sec</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.survey.Survey.summarize"><code class="docutils literal notranslate"><span class="pre">Survey.summarize()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.survey.Survey.tallies"><code class="docutils literal notranslate"><span class="pre">Survey.tallies</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.survey.Survey.to_csv"><code class="docutils literal notranslate"><span class="pre">Survey.to_csv()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.survey.Survey.to_records"><code class="docutils literal notranslate"><span class="pre">Survey.to_records()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.survey.Survey.top"><code class="docutils literal notranslate"><span class="pre">Survey.top()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.survey.collect_detections"><code class="docutils literal notranslate"><span class="pre">collect_detections()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.survey.merge_detections"><code class="docutils literal notranslate"><span class="pre">merge_detections()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="classpatch.html#module-classpatch">Module contents</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.AudioClassifier"><code class="docutils literal notranslate"><span class="pre">AudioClassifier</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.AudioClassifier.classify"><code class="docutils literal notranslate"><span class="pre">AudioClassifier.classify()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.AudioClassifier.labels"><code class="docutils literal notranslate"><span class="pre">AudioClassifier.labels</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.AudioClassifier.load"><code class="docutils literal notranslate"><span class="pre">AudioClassifier.load()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.AudioClassifier.name"><code class="docutils literal notranslate"><span class="pre">AudioClassifier.name</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.AudioClassifier.target_sample_rate"><code class="docutils literal notranslate"><span class="pre">AudioClassifier.target_sample_rate</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.AudioClassifier.unload"><code class="docutils literal notranslate"><span class="pre">AudioClassifier.unload()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.Detection"><code class="docutils literal notranslate"><span class="pre">Detection</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Detection.duration_sec"><code class="docutils literal notranslate"><span class="pre">Detection.duration_sec</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Detection.end_sec"><code class="docutils literal notranslate"><span class="pre">Detection.end_sec</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Detection.label"><code class="docutils literal notranslate"><span class="pre">Detection.label</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Detection.model"><code class="docutils literal notranslate"><span class="pre">Detection.model</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Detection.score"><code class="docutils literal notranslate"><span class="pre">Detection.score</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Detection.source_path"><code class="docutils literal notranslate"><span class="pre">Detection.source_path</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Detection.start_sec"><code class="docutils literal notranslate"><span class="pre">Detection.start_sec</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.Event"><code class="docutils literal notranslate"><span class="pre">Event</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Event.detection_count"><code class="docutils literal notranslate"><span class="pre">Event.detection_count</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Event.duration_sec"><code class="docutils literal notranslate"><span class="pre">Event.duration_sec</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Event.end_sec"><code class="docutils literal notranslate"><span class="pre">Event.end_sec</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Event.label"><code class="docutils literal notranslate"><span class="pre">Event.label</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Event.max_score"><code class="docutils literal notranslate"><span class="pre">Event.max_score</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Event.mean_score"><code class="docutils literal notranslate"><span class="pre">Event.mean_score</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Event.model"><code class="docutils literal notranslate"><span class="pre">Event.model</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Event.source_path"><code class="docutils literal notranslate"><span class="pre">Event.source_path</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Event.start_sec"><code class="docutils literal notranslate"><span class="pre">Event.start_sec</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.LabelGroup"><code class="docutils literal notranslate"><span class="pre">LabelGroup</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.LabelGroup.from_dict"><code class="docutils literal notranslate"><span class="pre">LabelGroup.from_dict()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.LabelGroup.labels"><code class="docutils literal notranslate"><span class="pre">LabelGroup.labels</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.LabelGroup.name"><code class="docutils literal notranslate"><span class="pre">LabelGroup.name</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.LabelGroup.to_dict"><code class="docutils literal notranslate"><span class="pre">LabelGroup.to_dict()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.LabelMatch"><code class="docutils literal notranslate"><span class="pre">LabelMatch</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.LabelMatch.from_dict"><code class="docutils literal notranslate"><span class="pre">LabelMatch.from_dict()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.LabelMatch.group"><code class="docutils literal notranslate"><span class="pre">LabelMatch.group</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.LabelMatch.labels"><code class="docutils literal notranslate"><span class="pre">LabelMatch.labels</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.LabelMatch.resolve"><code class="docutils literal notranslate"><span class="pre">LabelMatch.resolve()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.LabelMatch.to_dict"><code class="docutils literal notranslate"><span class="pre">LabelMatch.to_dict()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.LabelRoute"><code class="docutils literal notranslate"><span class="pre">LabelRoute</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.LabelRoute.from_dict"><code class="docutils literal notranslate"><span class="pre">LabelRoute.from_dict()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.LabelRoute.from_model"><code class="docutils literal notranslate"><span class="pre">LabelRoute.from_model</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.LabelRoute.match"><code class="docutils literal notranslate"><span class="pre">LabelRoute.match</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.LabelRoute.min_score"><code class="docutils literal notranslate"><span class="pre">LabelRoute.min_score</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.LabelRoute.target_label"><code class="docutils literal notranslate"><span class="pre">LabelRoute.target_label</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.LabelRoute.target_ontology"><code class="docutils literal notranslate"><span class="pre">LabelRoute.target_ontology</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.LabelRoute.to_dict"><code class="docutils literal notranslate"><span class="pre">LabelRoute.to_dict()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.LabelTally"><code class="docutils literal notranslate"><span class="pre">LabelTally</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.LabelTally.detection_count"><code class="docutils literal notranslate"><span class="pre">LabelTally.detection_count</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.LabelTally.event_count"><code class="docutils literal notranslate"><span class="pre">LabelTally.event_count</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.LabelTally.first_sec"><code class="docutils literal notranslate"><span class="pre">LabelTally.first_sec</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.LabelTally.label"><code class="docutils literal notranslate"><span class="pre">LabelTally.label</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.LabelTally.last_sec"><code class="docutils literal notranslate"><span class="pre">LabelTally.last_sec</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.LabelTally.max_score"><code class="docutils literal notranslate"><span class="pre">LabelTally.max_score</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.LabelTally.mean_score"><code class="docutils literal notranslate"><span class="pre">LabelTally.mean_score</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.LabelTally.model"><code class="docutils literal notranslate"><span class="pre">LabelTally.model</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.LabelTally.source_path"><code class="docutils literal notranslate"><span class="pre">LabelTally.source_path</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.LabelTally.to_record"><code class="docutils literal notranslate"><span class="pre">LabelTally.to_record()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.LabelTally.total_duration_sec"><code class="docutils literal notranslate"><span class="pre">LabelTally.total_duration_sec</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.LineageStep"><code class="docutils literal notranslate"><span class="pre">LineageStep</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.LineageStep.model"><code class="docutils literal notranslate"><span class="pre">LineageStep.model</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.LineageStep.triggering_label"><code class="docutils literal notranslate"><span class="pre">LineageStep.triggering_label</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.LineageStep.triggering_score"><code class="docutils literal notranslate"><span class="pre">LineageStep.triggering_score</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.OntologyBuilder"><code class="docutils literal notranslate"><span class="pre">OntologyBuilder</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.OntologyBuilder.relabel"><code class="docutils literal notranslate"><span class="pre">OntologyBuilder.relabel()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.Pipeline"><code class="docutils literal notranslate"><span class="pre">Pipeline</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Pipeline.models"><code class="docutils literal notranslate"><span class="pre">Pipeline.models</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Pipeline.register"><code class="docutils literal notranslate"><span class="pre">Pipeline.register()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Pipeline.run"><code class="docutils literal notranslate"><span class="pre">Pipeline.run()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Pipeline.run_many"><code class="docutils literal notranslate"><span class="pre">Pipeline.run_many()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.PipelineError"><code class="docutils literal notranslate"><span class="pre">PipelineError</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.Prediction"><code class="docutils literal notranslate"><span class="pre">Prediction</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Prediction.label"><code class="docutils literal notranslate"><span class="pre">Prediction.label</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Prediction.score"><code class="docutils literal notranslate"><span class="pre">Prediction.score</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Prediction.time_range"><code class="docutils literal notranslate"><span class="pre">Prediction.time_range</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.RelabelBuilder"><code class="docutils literal notranslate"><span class="pre">RelabelBuilder</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.RelabelBuilder.above"><code class="docutils literal notranslate"><span class="pre">RelabelBuilder.above()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.RelabelBuilder.as_label"><code class="docutils literal notranslate"><span class="pre">RelabelBuilder.as_label()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.RelabelBuilder.when"><code class="docutils literal notranslate"><span class="pre">RelabelBuilder.when()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.RelabelBuilder.when_any"><code class="docutils literal notranslate"><span class="pre">RelabelBuilder.when_any()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.RelabelBuilder.when_group"><code class="docutils literal notranslate"><span class="pre">RelabelBuilder.when_group()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.RelabelBuilder.when_label"><code class="docutils literal notranslate"><span class="pre">RelabelBuilder.when_label()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.ResultNode"><code class="docutils literal notranslate"><span class="pre">ResultNode</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.ResultNode.add_child"><code class="docutils literal notranslate"><span class="pre">ResultNode.add_child()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.ResultNode.add_trigger"><code class="docutils literal notranslate"><span class="pre">ResultNode.add_trigger()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.ResultNode.children"><code class="docutils literal notranslate"><span class="pre">ResultNode.children</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.ResultNode.from_dict"><code class="docutils literal notranslate"><span class="pre">ResultNode.from_dict()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.ResultNode.iter_rows"><code class="docutils literal notranslate"><span class="pre">ResultNode.iter_rows()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.ResultNode.load"><code class="docutils literal notranslate"><span class="pre">ResultNode.load()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.ResultNode.model"><code class="docutils literal notranslate"><span class="pre">ResultNode.model</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.ResultNode.predictions"><code class="docutils literal notranslate"><span class="pre">ResultNode.predictions</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.ResultNode.predictions_by_chunk"><code class="docutils literal notranslate"><span class="pre">ResultNode.predictions_by_chunk()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.ResultNode.save"><code class="docutils literal notranslate"><span class="pre">ResultNode.save()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.ResultNode.segment_time_range"><code class="docutils literal notranslate"><span class="pre">ResultNode.segment_time_range</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.ResultNode.source_path"><code class="docutils literal notranslate"><span class="pre">ResultNode.source_path</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.ResultNode.to_dict"><code class="docutils literal notranslate"><span class="pre">ResultNode.to_dict()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.ResultNode.triggers"><code class="docutils literal notranslate"><span class="pre">ResultNode.triggers</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.ResultNode.walk"><code class="docutils literal notranslate"><span class="pre">ResultNode.walk()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.ResultRow"><code class="docutils literal notranslate"><span class="pre">ResultRow</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.ResultRow.depth"><code class="docutils literal notranslate"><span class="pre">ResultRow.depth</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.ResultRow.end_sec"><code class="docutils literal notranslate"><span class="pre">ResultRow.end_sec</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.ResultRow.label"><code class="docutils literal notranslate"><span class="pre">ResultRow.label</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.ResultRow.model"><code class="docutils literal notranslate"><span class="pre">ResultRow.model</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.ResultRow.score"><code class="docutils literal notranslate"><span class="pre">ResultRow.score</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.ResultRow.source_path"><code class="docutils literal notranslate"><span class="pre">ResultRow.source_path</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.ResultRow.start_sec"><code class="docutils literal notranslate"><span class="pre">ResultRow.start_sec</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.RouteBook"><code class="docutils literal notranslate"><span class="pre">RouteBook</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.RouteBook.clear_label_rules"><code class="docutils literal notranslate"><span class="pre">RouteBook.clear_label_rules()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.RouteBook.clear_rules"><code class="docutils literal notranslate"><span class="pre">RouteBook.clear_rules()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.RouteBook.define_group"><code class="docutils literal notranslate"><span class="pre">RouteBook.define_group()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.RouteBook.define_ontology"><code class="docutils literal notranslate"><span class="pre">RouteBook.define_ontology()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.RouteBook.from_dict"><code class="docutils literal notranslate"><span class="pre">RouteBook.from_dict()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.RouteBook.group"><code class="docutils literal notranslate"><span class="pre">RouteBook.group()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.RouteBook.groups"><code class="docutils literal notranslate"><span class="pre">RouteBook.groups</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.RouteBook.label_rules"><code class="docutils literal notranslate"><span class="pre">RouteBook.label_rules</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.RouteBook.label_rules_for"><code class="docutils literal notranslate"><span class="pre">RouteBook.label_rules_for()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.RouteBook.load"><code class="docutils literal notranslate"><span class="pre">RouteBook.load()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.RouteBook.ontologies"><code class="docutils literal notranslate"><span class="pre">RouteBook.ontologies</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.RouteBook.ontology"><code class="docutils literal notranslate"><span class="pre">RouteBook.ontology()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.RouteBook.remove_label_rule"><code class="docutils literal notranslate"><span class="pre">RouteBook.remove_label_rule()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.RouteBook.remove_rule"><code class="docutils literal notranslate"><span class="pre">RouteBook.remove_rule()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.RouteBook.route"><code class="docutils literal notranslate"><span class="pre">RouteBook.route()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.RouteBook.rules"><code class="docutils literal notranslate"><span class="pre">RouteBook.rules</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.RouteBook.rules_for"><code class="docutils literal notranslate"><span class="pre">RouteBook.rules_for()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.RouteBook.save"><code class="docutils literal notranslate"><span class="pre">RouteBook.save()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.RouteBook.to_dict"><code class="docutils literal notranslate"><span class="pre">RouteBook.to_dict()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.RouteBuilder"><code class="docutils literal notranslate"><span class="pre">RouteBuilder</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.RouteBuilder.above"><code class="docutils literal notranslate"><span class="pre">RouteBuilder.above()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.RouteBuilder.to"><code class="docutils literal notranslate"><span class="pre">RouteBuilder.to()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.RouteBuilder.when"><code class="docutils literal notranslate"><span class="pre">RouteBuilder.when()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.RouteBuilder.when_any"><code class="docutils literal notranslate"><span class="pre">RouteBuilder.when_any()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.RouteBuilder.when_group"><code class="docutils literal notranslate"><span class="pre">RouteBuilder.when_group()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.RouteBuilder.when_label"><code class="docutils literal notranslate"><span class="pre">RouteBuilder.when_label()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.RoutingRule"><code class="docutils literal notranslate"><span class="pre">RoutingRule</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.RoutingRule.from_dict"><code class="docutils literal notranslate"><span class="pre">RoutingRule.from_dict()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.RoutingRule.from_model"><code class="docutils literal notranslate"><span class="pre">RoutingRule.from_model</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.RoutingRule.match"><code class="docutils literal notranslate"><span class="pre">RoutingRule.match</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.RoutingRule.max_depth"><code class="docutils literal notranslate"><span class="pre">RoutingRule.max_depth</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.RoutingRule.min_score"><code class="docutils literal notranslate"><span class="pre">RoutingRule.min_score</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.RoutingRule.payload"><code class="docutils literal notranslate"><span class="pre">RoutingRule.payload</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.RoutingRule.to_dict"><code class="docutils literal notranslate"><span class="pre">RoutingRule.to_dict()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.RoutingRule.to_models"><code class="docutils literal notranslate"><span class="pre">RoutingRule.to_models</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.SSLAMClassifier"><code class="docutils literal notranslate"><span class="pre">SSLAMClassifier</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.SSLAMClassifier.classify"><code class="docutils literal notranslate"><span class="pre">SSLAMClassifier.classify()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.SSLAMClassifier.device"><code class="docutils literal notranslate"><span class="pre">SSLAMClassifier.device</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.SSLAMClassifier.labels"><code class="docutils literal notranslate"><span class="pre">SSLAMClassifier.labels</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.SSLAMClassifier.load"><code class="docutils literal notranslate"><span class="pre">SSLAMClassifier.load()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.SSLAMClassifier.name"><code class="docutils literal notranslate"><span class="pre">SSLAMClassifier.name</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.SSLAMClassifier.target_sample_rate"><code class="docutils literal notranslate"><span class="pre">SSLAMClassifier.target_sample_rate</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.SSLAMClassifier.unload"><code class="docutils literal notranslate"><span class="pre">SSLAMClassifier.unload()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.Segment"><code class="docutils literal notranslate"><span class="pre">Segment</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Segment.duration"><code class="docutils literal notranslate"><span class="pre">Segment.duration</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Segment.lineage"><code class="docutils literal notranslate"><span class="pre">Segment.lineage</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Segment.num_samples"><code class="docutils literal notranslate"><span class="pre">Segment.num_samples</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Segment.sample_rate"><code class="docutils literal notranslate"><span class="pre">Segment.sample_rate</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Segment.source_path"><code class="docutils literal notranslate"><span class="pre">Segment.source_path</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Segment.time_range"><code class="docutils literal notranslate"><span class="pre">Segment.time_range</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Segment.waveform"><code class="docutils literal notranslate"><span class="pre">Segment.waveform</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Segment.with_lineage"><code class="docutils literal notranslate"><span class="pre">Segment.with_lineage()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.StubClassifier"><code class="docutils literal notranslate"><span class="pre">StubClassifier</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.StubClassifier.classify"><code class="docutils literal notranslate"><span class="pre">StubClassifier.classify()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.StubClassifier.load"><code class="docutils literal notranslate"><span class="pre">StubClassifier.load()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.StubClassifier.unload"><code class="docutils literal notranslate"><span class="pre">StubClassifier.unload()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.Survey"><code class="docutils literal notranslate"><span class="pre">Survey</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Survey.detections"><code class="docutils literal notranslate"><span class="pre">Survey.detections</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Survey.events"><code class="docutils literal notranslate"><span class="pre">Survey.events</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Survey.for_file"><code class="docutils literal notranslate"><span class="pre">Survey.for_file()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Survey.for_model"><code class="docutils literal notranslate"><span class="pre">Survey.for_model()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Survey.merge_gap_sec"><code class="docutils literal notranslate"><span class="pre">Survey.merge_gap_sec</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Survey.summarize"><code class="docutils literal notranslate"><span class="pre">Survey.summarize()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Survey.tallies"><code class="docutils literal notranslate"><span class="pre">Survey.tallies</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Survey.to_csv"><code class="docutils literal notranslate"><span class="pre">Survey.to_csv()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Survey.to_records"><code class="docutils literal notranslate"><span class="pre">Survey.to_records()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Survey.top"><code class="docutils literal notranslate"><span class="pre">Survey.top()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.Trigger"><code class="docutils literal notranslate"><span class="pre">Trigger</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Trigger.from_dict"><code class="docutils literal notranslate"><span class="pre">Trigger.from_dict()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Trigger.from_model"><code class="docutils literal notranslate"><span class="pre">Trigger.from_model</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Trigger.label"><code class="docutils literal notranslate"><span class="pre">Trigger.label</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Trigger.score"><code class="docutils literal notranslate"><span class="pre">Trigger.score</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Trigger.time_range"><code class="docutils literal notranslate"><span class="pre">Trigger.time_range</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="classpatch.html#classpatch.Trigger.to_dict"><code class="docutils literal notranslate"><span class="pre">Trigger.to_dict()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.collect_detections"><code class="docutils literal notranslate"><span class="pre">collect_detections()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.get_device"><code class="docutils literal notranslate"><span class="pre">get_device()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.list_audio_files"><code class="docutils literal notranslate"><span class="pre">list_audio_files()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.load_mono_waveform"><code class="docutils literal notranslate"><span class="pre">load_mono_waveform()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.merge_detections"><code class="docutils literal notranslate"><span class="pre">merge_detections()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.render"><code class="docutils literal notranslate"><span class="pre">render()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.resample_segment"><code class="docutils literal notranslate"><span class="pre">resample_segment()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="classpatch.html#classpatch.segment_from_file"><code class="docutils literal notranslate"><span class="pre">segment_from_file()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">ClassPatch</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2026, Will.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="../_sources/source/modules.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

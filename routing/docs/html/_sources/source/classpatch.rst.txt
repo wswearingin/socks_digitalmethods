@@ -1,0 +1,61 @@
+classpatch package
+==================
+
+Subpackages
+-----------
+
+.. toctree::
+   :maxdepth: 4
+
+   classpatch.models
+
+Submodules
+----------
+
+classpatch.base module
+----------------------
+
+.. automodule:: classpatch.base
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+classpatch.pipeline module
+--------------------------
+
+.. automodule:: classpatch.pipeline
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+classpatch.results module
+-------------------------
+
+.. automodule:: classpatch.results
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+classpatch.routing module
+-------------------------
+
+.. automodule:: classpatch.routing
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+classpatch.survey module
+------------------------
+
+.. automodule:: classpatch.survey
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+Module contents
+---------------
+
+.. automodule:: classpatch
+   :members:
+   :show-inheritance:
+   :undoc-members:

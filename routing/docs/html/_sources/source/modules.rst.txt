@@ -1,0 +1,7 @@
+classpatch
+==========
+
+.. toctree::
+   :maxdepth: 4
+
+   classpatch

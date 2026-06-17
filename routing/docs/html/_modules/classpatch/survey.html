@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>classpatch.survey &#8212; ClassPatch  documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../_static/alabaster.css?v=27fed22d" />
+    <script src="../../_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for classpatch.survey</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Survey / aggregation layer for classpatch result trees.</span>
+
+<span class="sd">Takes one or more :class:`ResultNode` trees produced by :class:`Pipeline.run`</span>
+<span class="sd">and produces per-file, per-label tallies suitable for the acoustic-ecology</span>
+<span class="sd">survey use case (&quot;how many of each sound event happened in each recording&quot;).</span>
+
+<span class="sd">Counting model</span>
+<span class="sd">--------------</span>
+
+<span class="sd">There are two interesting count semantics, both supported:</span>
+
+<span class="sd">- **Detection count** (default): every prediction above ``min_score`` is one</span>
+<span class="sd">  detection. A single 30 s bird call that fires three consecutive 10 s</span>
+<span class="sd">  SSLAM windows shows up as three detections.</span>
+<span class="sd">- **Merged event count** (opt-in via ``merge_gap_sec``): adjacent detections</span>
+<span class="sd">  of the same label whose time gap is at most ``merge_gap_sec`` collapse</span>
+<span class="sd">  into one event. The 30 s bird call above becomes one event when</span>
+<span class="sd">  ``merge_gap_sec &gt;= 0``.</span>
+
+<span class="sd">Each :class:`LabelTally` always reports *both* numbers so callers can decide</span>
+<span class="sd">which one they prefer at analysis time, regardless of the merging setting.</span>
+
+<span class="sd">&quot;Location&quot; is intentionally not modelled here: tallies are keyed by source</span>
+<span class="sd">audio path, and the user is expected to derive location from the filename</span>
+<span class="sd">downstream.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">csv</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Iterable</span><span class="p">,</span> <span class="n">Mapping</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">classpatch.results</span><span class="w"> </span><span class="kn">import</span> <span class="n">ResultNode</span><span class="p">,</span> <span class="n">ResultRow</span>
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># Data types</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+
+<div class="viewcode-block" id="Detection">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.survey.Detection">[docs]</a>
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Detection</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A single filtered prediction row (post ``min_score`` / model filter).&quot;&quot;&quot;</span>
+
+    <span class="n">source_path</span><span class="p">:</span> <span class="n">Path</span>
+    <span class="n">model</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">label</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">start_sec</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">end_sec</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">score</span><span class="p">:</span> <span class="nb">float</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">duration_sec</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">end_sec</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">start_sec</span></div>
+
+
+
+<div class="viewcode-block" id="Event">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.survey.Event">[docs]</a>
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Event</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;One or more contiguous detections of the same label collapsed together.</span>
+
+<span class="sd">    Produced by :func:`merge_detections`. ``detection_count`` records how many</span>
+<span class="sd">    individual detections went into this event; ``mean_score`` / ``max_score``</span>
+<span class="sd">    summarise their confidences.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">source_path</span><span class="p">:</span> <span class="n">Path</span>
+    <span class="n">model</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">label</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">start_sec</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">end_sec</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">detection_count</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">mean_score</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">max_score</span><span class="p">:</span> <span class="nb">float</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">duration_sec</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">end_sec</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">start_sec</span></div>
+
+
+
+<div class="viewcode-block" id="LabelTally">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.survey.LabelTally">[docs]</a>
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">LabelTally</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Aggregated stats for one ``(source_path, model, label)`` combination.</span>
+
+<span class="sd">    Reports both detection count and merged event count so the consumer can</span>
+<span class="sd">    pick whichever interpretation they want without re-aggregating. When the</span>
+<span class="sd">    survey was computed with ``merge_gap_sec=None`` the two are equal.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">source_path</span><span class="p">:</span> <span class="n">Path</span>
+    <span class="n">model</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">label</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">detection_count</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">event_count</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">total_duration_sec</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">mean_score</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">max_score</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">first_sec</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">last_sec</span><span class="p">:</span> <span class="nb">float</span>
+
+<div class="viewcode-block" id="LabelTally.to_record">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.survey.LabelTally.to_record">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_record</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Flat dict, suitable for CSV / pandas / JSON export.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;source_path&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">source_path</span><span class="p">),</span>
+            <span class="s2">&quot;filename&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">source_path</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+            <span class="s2">&quot;model&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="p">,</span>
+            <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">label</span><span class="p">,</span>
+            <span class="s2">&quot;detection_count&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">detection_count</span><span class="p">,</span>
+            <span class="s2">&quot;event_count&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">event_count</span><span class="p">,</span>
+            <span class="s2">&quot;total_duration_sec&quot;</span><span class="p">:</span> <span class="nb">round</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">total_duration_sec</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span>
+            <span class="s2">&quot;mean_score&quot;</span><span class="p">:</span> <span class="nb">round</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">mean_score</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span>
+            <span class="s2">&quot;max_score&quot;</span><span class="p">:</span> <span class="nb">round</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">max_score</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span>
+            <span class="s2">&quot;first_sec&quot;</span><span class="p">:</span> <span class="nb">round</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">first_sec</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span>
+            <span class="s2">&quot;last_sec&quot;</span><span class="p">:</span> <span class="nb">round</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">last_sec</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span>
+        <span class="p">}</span></div>
+</div>
+
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># Core helpers</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+
+<div class="viewcode-block" id="collect_detections">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.survey.collect_detections">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">collect_detections</span><span class="p">(</span>
+    <span class="n">trees</span><span class="p">:</span> <span class="n">ResultNode</span> <span class="o">|</span> <span class="n">Mapping</span><span class="p">[</span><span class="n">Path</span><span class="p">,</span> <span class="n">ResultNode</span><span class="p">]</span> <span class="o">|</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">ResultNode</span><span class="p">],</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">min_score</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span>
+    <span class="n">models</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">labels</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">Detection</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Flatten one or more result trees into a list of :class:`Detection`s.</span>
+
+<span class="sd">    Accepts a single :class:`ResultNode`, a ``{Path: ResultNode}`` mapping</span>
+<span class="sd">    (matching :meth:`Pipeline.run_many` output), or any iterable of trees.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">nodes</span> <span class="o">=</span> <span class="n">_normalise_trees</span><span class="p">(</span><span class="n">trees</span><span class="p">)</span>
+    <span class="n">model_filter</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">models</span><span class="p">)</span> <span class="k">if</span> <span class="n">models</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+    <span class="n">label_filter</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">labels</span><span class="p">)</span> <span class="k">if</span> <span class="n">labels</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+
+    <span class="n">detections</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Detection</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">node</span> <span class="ow">in</span> <span class="n">nodes</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">iter_rows</span><span class="p">(</span><span class="n">min_score</span><span class="o">=</span><span class="n">min_score</span><span class="p">,</span> <span class="n">models</span><span class="o">=</span><span class="n">model_filter</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">label_filter</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">row</span><span class="o">.</span><span class="n">label</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">label_filter</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">detections</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">_detection_from_row</span><span class="p">(</span><span class="n">row</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">detections</span></div>
+
+
+
+<div class="viewcode-block" id="merge_detections">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.survey.merge_detections">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">merge_detections</span><span class="p">(</span>
+    <span class="n">detections</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">Detection</span><span class="p">],</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">merge_gap_sec</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">Event</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Collapse adjacent same-label detections into :class:`Event`s.</span>
+
+<span class="sd">    Two detections of the same ``(source_path, model, label)`` merge when</span>
+<span class="sd">    the gap between the previous detection&#39;s ``end_sec`` and the next one&#39;s</span>
+<span class="sd">    ``start_sec`` is at most ``merge_gap_sec`` (overlapping detections, where</span>
+<span class="sd">    the gap is negative, always merge).</span>
+
+<span class="sd">    With ``merge_gap_sec=0`` only touching or overlapping detections merge,</span>
+<span class="sd">    which is the right behavior for computing union duration when adjacent</span>
+<span class="sd">    model windows partially overlap.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">merge_gap_sec</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;merge_gap_sec must be &gt;= 0, got </span><span class="si">{</span><span class="n">merge_gap_sec</span><span class="si">!r}</span><span class="s2">.&quot;</span><span class="p">)</span>
+
+    <span class="n">grouped</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="n">Path</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="nb">list</span><span class="p">[</span><span class="n">Detection</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">detections</span><span class="p">:</span>
+        <span class="n">grouped</span><span class="o">.</span><span class="n">setdefault</span><span class="p">((</span><span class="n">d</span><span class="o">.</span><span class="n">source_path</span><span class="p">,</span> <span class="n">d</span><span class="o">.</span><span class="n">model</span><span class="p">,</span> <span class="n">d</span><span class="o">.</span><span class="n">label</span><span class="p">),</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
+
+    <span class="n">events</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Event</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">label</span><span class="p">),</span> <span class="n">group</span> <span class="ow">in</span> <span class="n">grouped</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="n">group</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">d</span><span class="p">:</span> <span class="p">(</span><span class="n">d</span><span class="o">.</span><span class="n">start_sec</span><span class="p">,</span> <span class="n">d</span><span class="o">.</span><span class="n">end_sec</span><span class="p">))</span>
+
+        <span class="n">run_start</span> <span class="o">=</span> <span class="n">group</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">start_sec</span>
+        <span class="n">run_end</span> <span class="o">=</span> <span class="n">group</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">end_sec</span>
+        <span class="n">run_scores</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">group</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">score</span><span class="p">]</span>
+
+        <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">group</span><span class="p">[</span><span class="mi">1</span><span class="p">:]:</span>
+            <span class="n">gap</span> <span class="o">=</span> <span class="n">d</span><span class="o">.</span><span class="n">start_sec</span> <span class="o">-</span> <span class="n">run_end</span>
+            <span class="k">if</span> <span class="n">gap</span> <span class="o">&lt;=</span> <span class="n">merge_gap_sec</span><span class="p">:</span>
+                <span class="n">run_end</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">run_end</span><span class="p">,</span> <span class="n">d</span><span class="o">.</span><span class="n">end_sec</span><span class="p">)</span>
+                <span class="n">run_scores</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">d</span><span class="o">.</span><span class="n">score</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">events</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="n">_build_event</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">label</span><span class="p">,</span> <span class="n">run_start</span><span class="p">,</span> <span class="n">run_end</span><span class="p">,</span> <span class="n">run_scores</span><span class="p">)</span>
+                <span class="p">)</span>
+                <span class="n">run_start</span><span class="p">,</span> <span class="n">run_end</span> <span class="o">=</span> <span class="n">d</span><span class="o">.</span><span class="n">start_sec</span><span class="p">,</span> <span class="n">d</span><span class="o">.</span><span class="n">end_sec</span>
+                <span class="n">run_scores</span> <span class="o">=</span> <span class="p">[</span><span class="n">d</span><span class="o">.</span><span class="n">score</span><span class="p">]</span>
+
+        <span class="n">events</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">_build_event</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">label</span><span class="p">,</span> <span class="n">run_start</span><span class="p">,</span> <span class="n">run_end</span><span class="p">,</span> <span class="n">run_scores</span><span class="p">)</span>
+        <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">events</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_build_event</span><span class="p">(</span>
+    <span class="n">source</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+    <span class="n">model</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">label</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">start</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+    <span class="n">end</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+    <span class="n">scores</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Event</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">Event</span><span class="p">(</span>
+        <span class="n">source_path</span><span class="o">=</span><span class="n">source</span><span class="p">,</span>
+        <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
+        <span class="n">label</span><span class="o">=</span><span class="n">label</span><span class="p">,</span>
+        <span class="n">start_sec</span><span class="o">=</span><span class="n">start</span><span class="p">,</span>
+        <span class="n">end_sec</span><span class="o">=</span><span class="n">end</span><span class="p">,</span>
+        <span class="n">detection_count</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">scores</span><span class="p">),</span>
+        <span class="n">mean_score</span><span class="o">=</span><span class="nb">sum</span><span class="p">(</span><span class="n">scores</span><span class="p">)</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">scores</span><span class="p">),</span>
+        <span class="n">max_score</span><span class="o">=</span><span class="nb">max</span><span class="p">(</span><span class="n">scores</span><span class="p">),</span>
+    <span class="p">)</span>
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># Survey</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+
+<div class="viewcode-block" id="Survey">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.survey.Survey">[docs]</a>
+<span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Survey</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A population of :class:`LabelTally` rows plus the events that produced them.</span>
+
+<span class="sd">    Typical use::</span>
+
+<span class="sd">        survey = Survey.summarize(pipeline.run_many(paths, entry_model=&quot;sslam&quot;))</span>
+<span class="sd">        survey.to_csv(&quot;counts.csv&quot;)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">tallies</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">LabelTally</span><span class="p">]</span>
+    <span class="n">events</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Event</span><span class="p">]</span>
+    <span class="n">detections</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Detection</span><span class="p">]</span>
+    <span class="n">merge_gap_sec</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span>
+
+    <span class="c1"># ----- construction ------------------------------------------------</span>
+
+<div class="viewcode-block" id="Survey.summarize">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.survey.Survey.summarize">[docs]</a>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">summarize</span><span class="p">(</span>
+        <span class="bp">cls</span><span class="p">,</span>
+        <span class="n">trees</span><span class="p">:</span> <span class="n">ResultNode</span> <span class="o">|</span> <span class="n">Mapping</span><span class="p">[</span><span class="n">Path</span><span class="p">,</span> <span class="n">ResultNode</span><span class="p">]</span> <span class="o">|</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">ResultNode</span><span class="p">],</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">min_score</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span>
+        <span class="n">models</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">labels</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">merge_gap_sec</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Survey&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;One-stop entry point.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        trees :</span>
+<span class="sd">            Result tree(s) to aggregate. Same shapes accepted as by</span>
+<span class="sd">            :func:`collect_detections`.</span>
+<span class="sd">        min_score :</span>
+<span class="sd">            Drop predictions below this confidence.</span>
+<span class="sd">        models :</span>
+<span class="sd">            If given, only count predictions emitted by these models. Useful</span>
+<span class="sd">            for restricting to a single specialist&#39;s vocabulary (e.g. species</span>
+<span class="sd">            labels from a downstream classifier) and ignoring the coarser</span>
+<span class="sd">            labels of the upstream model.</span>
+<span class="sd">        labels :</span>
+<span class="sd">            Optional whitelist of labels to keep.</span>
+<span class="sd">        merge_gap_sec :</span>
+<span class="sd">            ``None`` (default) -&gt; no merging; event_count == detection_count.</span>
+<span class="sd">            ``0`` or positive -&gt; merge adjacent same-label detections whose</span>
+<span class="sd">            gap is at most this many seconds.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">detections</span> <span class="o">=</span> <span class="n">collect_detections</span><span class="p">(</span>
+            <span class="n">trees</span><span class="p">,</span> <span class="n">min_score</span><span class="o">=</span><span class="n">min_score</span><span class="p">,</span> <span class="n">models</span><span class="o">=</span><span class="n">models</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="n">labels</span>
+        <span class="p">)</span>
+
+        <span class="c1"># Union-duration events are always computed with a 0-gap merge so</span>
+        <span class="c1"># overlapping windows don&#39;t double-count toward total_duration_sec.</span>
+        <span class="n">union_events</span> <span class="o">=</span> <span class="n">merge_detections</span><span class="p">(</span><span class="n">detections</span><span class="p">,</span> <span class="n">merge_gap_sec</span><span class="o">=</span><span class="mf">0.0</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">merge_gap_sec</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">count_events</span> <span class="o">=</span> <span class="n">union_events</span>  <span class="c1"># not actually used for counting</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">count_events</span> <span class="o">=</span> <span class="n">merge_detections</span><span class="p">(</span><span class="n">detections</span><span class="p">,</span> <span class="n">merge_gap_sec</span><span class="o">=</span><span class="n">merge_gap_sec</span><span class="p">)</span>
+
+        <span class="n">tallies</span> <span class="o">=</span> <span class="n">_build_tallies</span><span class="p">(</span>
+            <span class="n">detections</span><span class="p">,</span>
+            <span class="n">union_events</span><span class="o">=</span><span class="n">union_events</span><span class="p">,</span>
+            <span class="n">count_events</span><span class="o">=</span><span class="n">count_events</span><span class="p">,</span>
+            <span class="n">count_by_events</span><span class="o">=</span><span class="n">merge_gap_sec</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+            <span class="n">tallies</span><span class="o">=</span><span class="n">tallies</span><span class="p">,</span>
+            <span class="n">events</span><span class="o">=</span><span class="n">count_events</span><span class="p">,</span>
+            <span class="n">detections</span><span class="o">=</span><span class="n">detections</span><span class="p">,</span>
+            <span class="n">merge_gap_sec</span><span class="o">=</span><span class="n">merge_gap_sec</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+
+    <span class="c1"># ----- querying ---------------------------------------------------</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tallies</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__iter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">iter</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tallies</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Survey.for_file">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.survey.Survey.for_file">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">for_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">source_path</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">LabelTally</span><span class="p">]:</span>
+        <span class="n">path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">source_path</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">t</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">tallies</span> <span class="k">if</span> <span class="n">t</span><span class="o">.</span><span class="n">source_path</span> <span class="o">==</span> <span class="n">path</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="Survey.for_model">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.survey.Survey.for_model">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">for_model</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">LabelTally</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">t</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">tallies</span> <span class="k">if</span> <span class="n">t</span><span class="o">.</span><span class="n">model</span> <span class="o">==</span> <span class="n">model</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="Survey.top">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.survey.Survey.top">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">top</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">LabelTally</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;``n`` tallies with the highest ``detection_count``, ties on ``max_score``.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">sorted</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">tallies</span><span class="p">,</span>
+            <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">t</span><span class="p">:</span> <span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">detection_count</span><span class="p">,</span> <span class="n">t</span><span class="o">.</span><span class="n">max_score</span><span class="p">),</span>
+            <span class="n">reverse</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="p">)[:</span><span class="n">n</span><span class="p">]</span></div>
+
+
+    <span class="c1"># ----- export -----------------------------------------------------</span>
+
+<div class="viewcode-block" id="Survey.to_records">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.survey.Survey.to_records">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_records</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;List of flat dicts, ready for pandas / JSON / etc.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">t</span><span class="o">.</span><span class="n">to_record</span><span class="p">()</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">tallies</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="Survey.to_csv">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.survey.Survey.to_csv">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_csv</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Write tallies to a CSV file. Returns the resolved path.&quot;&quot;&quot;</span>
+        <span class="n">path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+        <span class="n">path</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">records</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">to_records</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">records</span><span class="p">:</span>
+            <span class="n">fieldnames</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="s2">&quot;source_path&quot;</span><span class="p">,</span> <span class="s2">&quot;filename&quot;</span><span class="p">,</span> <span class="s2">&quot;model&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;detection_count&quot;</span><span class="p">,</span> <span class="s2">&quot;event_count&quot;</span><span class="p">,</span> <span class="s2">&quot;total_duration_sec&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;mean_score&quot;</span><span class="p">,</span> <span class="s2">&quot;max_score&quot;</span><span class="p">,</span> <span class="s2">&quot;first_sec&quot;</span><span class="p">,</span> <span class="s2">&quot;last_sec&quot;</span><span class="p">,</span>
+            <span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">fieldnames</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">records</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+        <span class="k">with</span> <span class="n">path</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="s2">&quot;w&quot;</span><span class="p">,</span> <span class="n">newline</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="n">writer</span> <span class="o">=</span> <span class="n">csv</span><span class="o">.</span><span class="n">DictWriter</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">fieldnames</span><span class="o">=</span><span class="n">fieldnames</span><span class="p">)</span>
+            <span class="n">writer</span><span class="o">.</span><span class="n">writeheader</span><span class="p">()</span>
+            <span class="n">writer</span><span class="o">.</span><span class="n">writerows</span><span class="p">(</span><span class="n">records</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">path</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">files</span> <span class="o">=</span> <span class="nb">len</span><span class="p">({</span><span class="n">t</span><span class="o">.</span><span class="n">source_path</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">tallies</span><span class="p">})</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;Survey(tallies=</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tallies</span><span class="p">)</span><span class="si">}</span><span class="s2">, &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;files=</span><span class="si">{</span><span class="n">files</span><span class="si">}</span><span class="s2">, &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;events=</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">events</span><span class="p">)</span><span class="si">}</span><span class="s2">, &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;detections=</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">detections</span><span class="p">)</span><span class="si">}</span><span class="s2">, &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;merge_gap_sec=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">merge_gap_sec</span><span class="si">}</span><span class="s2">)&quot;</span>
+        <span class="p">)</span></div>
+
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># Internal helpers</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_normalise_trees</span><span class="p">(</span>
+    <span class="n">trees</span><span class="p">:</span> <span class="n">ResultNode</span> <span class="o">|</span> <span class="n">Mapping</span><span class="p">[</span><span class="n">Path</span><span class="p">,</span> <span class="n">ResultNode</span><span class="p">]</span> <span class="o">|</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">ResultNode</span><span class="p">],</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">ResultNode</span><span class="p">]:</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">trees</span><span class="p">,</span> <span class="n">ResultNode</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">trees</span><span class="p">]</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">trees</span><span class="p">,</span> <span class="n">Mapping</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="n">trees</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
+    <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="n">trees</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_detection_from_row</span><span class="p">(</span><span class="n">row</span><span class="p">:</span> <span class="n">ResultRow</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Detection</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">Detection</span><span class="p">(</span>
+        <span class="n">source_path</span><span class="o">=</span><span class="n">row</span><span class="o">.</span><span class="n">source_path</span><span class="p">,</span>
+        <span class="n">model</span><span class="o">=</span><span class="n">row</span><span class="o">.</span><span class="n">model</span><span class="p">,</span>
+        <span class="n">label</span><span class="o">=</span><span class="n">row</span><span class="o">.</span><span class="n">label</span><span class="p">,</span>
+        <span class="n">start_sec</span><span class="o">=</span><span class="n">row</span><span class="o">.</span><span class="n">start_sec</span><span class="p">,</span>
+        <span class="n">end_sec</span><span class="o">=</span><span class="n">row</span><span class="o">.</span><span class="n">end_sec</span><span class="p">,</span>
+        <span class="n">score</span><span class="o">=</span><span class="n">row</span><span class="o">.</span><span class="n">score</span><span class="p">,</span>
+    <span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_build_tallies</span><span class="p">(</span>
+    <span class="n">detections</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Detection</span><span class="p">],</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">union_events</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Event</span><span class="p">],</span>
+    <span class="n">count_events</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Event</span><span class="p">],</span>
+    <span class="n">count_by_events</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">LabelTally</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Aggregate detections + events into per-key :class:`LabelTally` rows.&quot;&quot;&quot;</span>
+
+    <span class="n">Key</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Path</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span>
+
+    <span class="n">det_by_key</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">Key</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="n">Detection</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">detections</span><span class="p">:</span>
+        <span class="n">det_by_key</span><span class="o">.</span><span class="n">setdefault</span><span class="p">((</span><span class="n">d</span><span class="o">.</span><span class="n">source_path</span><span class="p">,</span> <span class="n">d</span><span class="o">.</span><span class="n">model</span><span class="p">,</span> <span class="n">d</span><span class="o">.</span><span class="n">label</span><span class="p">),</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
+
+    <span class="n">union_by_key</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">Key</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="n">Event</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">union_events</span><span class="p">:</span>
+        <span class="n">union_by_key</span><span class="o">.</span><span class="n">setdefault</span><span class="p">((</span><span class="n">e</span><span class="o">.</span><span class="n">source_path</span><span class="p">,</span> <span class="n">e</span><span class="o">.</span><span class="n">model</span><span class="p">,</span> <span class="n">e</span><span class="o">.</span><span class="n">label</span><span class="p">),</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+
+    <span class="n">count_by_key</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">Key</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="n">Event</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">count_events</span><span class="p">:</span>
+        <span class="n">count_by_key</span><span class="o">.</span><span class="n">setdefault</span><span class="p">((</span><span class="n">e</span><span class="o">.</span><span class="n">source_path</span><span class="p">,</span> <span class="n">e</span><span class="o">.</span><span class="n">model</span><span class="p">,</span> <span class="n">e</span><span class="o">.</span><span class="n">label</span><span class="p">),</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+
+    <span class="n">tallies</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">LabelTally</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">dets</span> <span class="ow">in</span> <span class="n">det_by_key</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="n">source_path</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">label</span> <span class="o">=</span> <span class="n">key</span>
+        <span class="n">scores</span> <span class="o">=</span> <span class="p">[</span><span class="n">d</span><span class="o">.</span><span class="n">score</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">dets</span><span class="p">]</span>
+        <span class="n">starts</span> <span class="o">=</span> <span class="p">[</span><span class="n">d</span><span class="o">.</span><span class="n">start_sec</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">dets</span><span class="p">]</span>
+        <span class="n">ends</span> <span class="o">=</span> <span class="p">[</span><span class="n">d</span><span class="o">.</span><span class="n">end_sec</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">dets</span><span class="p">]</span>
+
+        <span class="n">union_events_for_key</span> <span class="o">=</span> <span class="n">union_by_key</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="p">[])</span>
+        <span class="n">total_duration</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">duration_sec</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">union_events_for_key</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">count_by_events</span><span class="p">:</span>
+            <span class="n">event_count</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">count_by_key</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="p">[]))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">event_count</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">dets</span><span class="p">)</span>
+
+        <span class="n">tallies</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">LabelTally</span><span class="p">(</span>
+                <span class="n">source_path</span><span class="o">=</span><span class="n">source_path</span><span class="p">,</span>
+                <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
+                <span class="n">label</span><span class="o">=</span><span class="n">label</span><span class="p">,</span>
+                <span class="n">detection_count</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">dets</span><span class="p">),</span>
+                <span class="n">event_count</span><span class="o">=</span><span class="n">event_count</span><span class="p">,</span>
+                <span class="n">total_duration_sec</span><span class="o">=</span><span class="n">total_duration</span><span class="p">,</span>
+                <span class="n">mean_score</span><span class="o">=</span><span class="nb">sum</span><span class="p">(</span><span class="n">scores</span><span class="p">)</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">scores</span><span class="p">),</span>
+                <span class="n">max_score</span><span class="o">=</span><span class="nb">max</span><span class="p">(</span><span class="n">scores</span><span class="p">),</span>
+                <span class="n">first_sec</span><span class="o">=</span><span class="nb">min</span><span class="p">(</span><span class="n">starts</span><span class="p">),</span>
+                <span class="n">last_sec</span><span class="o">=</span><span class="nb">max</span><span class="p">(</span><span class="n">ends</span><span class="p">),</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+
+    <span class="n">tallies</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">t</span><span class="p">:</span> <span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">source_path</span><span class="p">),</span> <span class="n">t</span><span class="o">.</span><span class="n">model</span><span class="p">,</span> <span class="o">-</span><span class="n">t</span><span class="o">.</span><span class="n">detection_count</span><span class="p">,</span> <span class="n">t</span><span class="o">.</span><span class="n">label</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">tallies</span>
+
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s2">&quot;Detection&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;Event&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;LabelTally&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;Survey&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;collect_detections&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;merge_detections&quot;</span><span class="p">,</span>
+<span class="p">]</span>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">ClassPatch</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2026, Will.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>classpatch.results &#8212; ClassPatch  documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../_static/alabaster.css?v=27fed22d" />
+    <script src="../../_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for classpatch.results</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Result tree types for the classpatch pipeline.</span>
+
+<span class="sd">A :class:`ResultNode` represents a single model invocation. The executor</span>
+<span class="sd">populates a tree of these per pipeline run, rooted at the entry model.</span>
+<span class="sd">Each node owns:</span>
+
+<span class="sd">- which model produced it,</span>
+<span class="sd">- the absolute time range of its input segment within the source file,</span>
+<span class="sd">- the predictions the model emitted (potentially across multiple internal</span>
+<span class="sd">  chunks, each prediction carrying its own sub-range),</span>
+<span class="sd">- the parent prediction(s) that triggered the invocation (empty for the</span>
+<span class="sd">  root),</span>
+<span class="sd">- the downstream nodes produced when matching routing rules fired.</span>
+
+<span class="sd">The tree is the canonical record of &quot;what did each model say about each</span>
+<span class="sd">segment&quot;, and is the primary input to the survey / aggregation layer via</span>
+<span class="sd">:meth:`ResultNode.iter_rows`.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Iterator</span><span class="p">,</span> <span class="n">Mapping</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">classpatch.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">Prediction</span>
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># Trigger + flat row types</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+
+<div class="viewcode-block" id="Trigger">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.results.Trigger">[docs]</a>
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Trigger</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A parent prediction that caused a downstream model invocation.</span>
+
+<span class="sd">    Multiple ``Trigger`` entries on a single node mean several rules from the</span>
+<span class="sd">    same parent matched the same chunk and were deduplicated into one</span>
+<span class="sd">    invocation (e.g. SSLAM emitting both ``Bird`` and ``Chirp, tweet`` on the</span>
+<span class="sd">    same 10 s window, both routing to BirdNET).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">from_model</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">label</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">score</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">time_range</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span>
+
+<div class="viewcode-block" id="Trigger.to_dict">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.results.Trigger.to_dict">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;from_model&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">from_model</span><span class="p">,</span>
+            <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">label</span><span class="p">,</span>
+            <span class="s2">&quot;score&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">score</span><span class="p">,</span>
+            <span class="s2">&quot;time_range&quot;</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">time_range</span><span class="p">),</span>
+        <span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="Trigger.from_dict">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.results.Trigger.from_dict">[docs]</a>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">from_dict</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">d</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Trigger&quot;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+            <span class="n">from_model</span><span class="o">=</span><span class="n">d</span><span class="p">[</span><span class="s2">&quot;from_model&quot;</span><span class="p">],</span>
+            <span class="n">label</span><span class="o">=</span><span class="n">d</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">],</span>
+            <span class="n">score</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="n">d</span><span class="p">[</span><span class="s2">&quot;score&quot;</span><span class="p">]),</span>
+            <span class="n">time_range</span><span class="o">=</span><span class="nb">tuple</span><span class="p">(</span><span class="n">d</span><span class="p">[</span><span class="s2">&quot;time_range&quot;</span><span class="p">]),</span>  <span class="c1"># type: ignore[arg-type]</span>
+        <span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="ResultRow">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.results.ResultRow">[docs]</a>
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">ResultRow</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;One prediction, flattened with enough context for tabular analysis.</span>
+
+<span class="sd">    Produced by :meth:`ResultNode.iter_rows` and consumed by the survey</span>
+<span class="sd">    layer to group by ``(source_path, label)`` etc.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">source_path</span><span class="p">:</span> <span class="n">Path</span>
+    <span class="n">model</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">label</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">score</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">start_sec</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">end_sec</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">depth</span><span class="p">:</span> <span class="nb">int</span>  <span class="c1"># 0 = root (entry) model invocation; +1 per routing hop</span></div>
+
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># ResultNode</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+
+<div class="viewcode-block" id="ResultNode">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.results.ResultNode">[docs]</a>
+<span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">ResultNode</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;One model invocation in a pipeline run.</span>
+
+<span class="sd">    Mutable on purpose: the executor builds it incrementally as classification</span>
+<span class="sd">    completes and routing rules fire. Once a run finishes it can be treated</span>
+<span class="sd">    as effectively immutable.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">model</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">source_path</span><span class="p">:</span> <span class="n">Path</span>
+    <span class="n">segment_time_range</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span>
+    <span class="n">predictions</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Prediction</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+    <span class="n">triggers</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Trigger</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+    <span class="n">children</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="s2">&quot;ResultNode&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+
+    <span class="c1"># ----- mutation helpers --------------------------------------------</span>
+
+<div class="viewcode-block" id="ResultNode.add_child">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.results.ResultNode.add_child">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">add_child</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">child</span><span class="p">:</span> <span class="s2">&quot;ResultNode&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;ResultNode&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Append ``child`` to :attr:`children` and return it.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">children</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">child</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">child</span></div>
+
+
+<div class="viewcode-block" id="ResultNode.add_trigger">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.results.ResultNode.add_trigger">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">add_trigger</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">trigger</span><span class="p">:</span> <span class="n">Trigger</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Record an additional parent prediction that caused this node.</span>
+
+<span class="sd">        Used by the executor&#39;s dedup logic: when two rules from the same</span>
+<span class="sd">        parent route to the same target on the same chunk, the second one</span>
+<span class="sd">        merges its trigger into the existing node rather than spawning a</span>
+<span class="sd">        duplicate invocation.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">triggers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">trigger</span><span class="p">)</span></div>
+
+
+    <span class="c1"># ----- traversal ---------------------------------------------------</span>
+
+<div class="viewcode-block" id="ResultNode.walk">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.results.ResultNode.walk">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">walk</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">depth</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterator</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="s2">&quot;ResultNode&quot;</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Depth-first walk yielding ``(node, depth)`` pairs.</span>
+
+<span class="sd">        ``depth`` is 0 at the root and increases by 1 for each routing hop.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">yield</span> <span class="bp">self</span><span class="p">,</span> <span class="n">depth</span>
+        <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">children</span><span class="p">:</span>
+            <span class="k">yield from</span> <span class="n">c</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="n">depth</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="ResultNode.iter_rows">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.results.ResultNode.iter_rows">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">iter_rows</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">min_score</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span>
+        <span class="n">models</span><span class="p">:</span> <span class="n">Iterator</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterator</span><span class="p">[</span><span class="n">ResultRow</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Yield one :class:`ResultRow` per prediction in the tree.</span>
+
+<span class="sd">        ``min_score`` filters out low-confidence detections; ``models``</span>
+<span class="sd">        restricts to a subset of models, useful for narrowing aggregation</span>
+<span class="sd">        to a single specialist&#39;s vocabulary.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">model_filter</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">models</span><span class="p">)</span> <span class="k">if</span> <span class="n">models</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="k">for</span> <span class="n">node</span><span class="p">,</span> <span class="n">depth</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">walk</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">model_filter</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">node</span><span class="o">.</span><span class="n">model</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">model_filter</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">predictions</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">score</span> <span class="o">&lt;</span> <span class="n">min_score</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="k">yield</span> <span class="n">ResultRow</span><span class="p">(</span>
+                    <span class="n">source_path</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">source_path</span><span class="p">,</span>
+                    <span class="n">model</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">model</span><span class="p">,</span>
+                    <span class="n">label</span><span class="o">=</span><span class="n">p</span><span class="o">.</span><span class="n">label</span><span class="p">,</span>
+                    <span class="n">score</span><span class="o">=</span><span class="n">p</span><span class="o">.</span><span class="n">score</span><span class="p">,</span>
+                    <span class="n">start_sec</span><span class="o">=</span><span class="n">p</span><span class="o">.</span><span class="n">time_range</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+                    <span class="n">end_sec</span><span class="o">=</span><span class="n">p</span><span class="o">.</span><span class="n">time_range</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span>
+                    <span class="n">depth</span><span class="o">=</span><span class="n">depth</span><span class="p">,</span>
+                <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="ResultNode.predictions_by_chunk">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.results.ResultNode.predictions_by_chunk">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">predictions_by_chunk</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">],</span> <span class="nb">list</span><span class="p">[</span><span class="n">Prediction</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Group this node&#39;s predictions by their internal time_range.</span>
+
+<span class="sd">        Each group is sorted by score descending; the dict itself is ordered</span>
+<span class="sd">        by chunk start time. Used by :func:`render`.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">groups</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">],</span> <span class="nb">list</span><span class="p">[</span><span class="n">Prediction</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">predictions</span><span class="p">:</span>
+            <span class="n">groups</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">time_range</span><span class="p">,</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">chunk_preds</span> <span class="ow">in</span> <span class="n">groups</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+            <span class="n">chunk_preds</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">p</span><span class="p">:</span> <span class="n">p</span><span class="o">.</span><span class="n">score</span><span class="p">,</span> <span class="n">reverse</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">dict</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">groups</span><span class="o">.</span><span class="n">items</span><span class="p">(),</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">kv</span><span class="p">:</span> <span class="n">kv</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span></div>
+
+
+    <span class="c1"># ----- persistence -------------------------------------------------</span>
+
+<div class="viewcode-block" id="ResultNode.to_dict">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.results.ResultNode.to_dict">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;model&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="p">,</span>
+            <span class="s2">&quot;source_path&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">source_path</span><span class="p">),</span>
+            <span class="s2">&quot;segment_time_range&quot;</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">segment_time_range</span><span class="p">),</span>
+            <span class="s2">&quot;predictions&quot;</span><span class="p">:</span> <span class="p">[</span>
+                <span class="p">{</span>
+                    <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="n">p</span><span class="o">.</span><span class="n">label</span><span class="p">,</span>
+                    <span class="s2">&quot;score&quot;</span><span class="p">:</span> <span class="n">p</span><span class="o">.</span><span class="n">score</span><span class="p">,</span>
+                    <span class="s2">&quot;time_range&quot;</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">time_range</span><span class="p">),</span>
+                <span class="p">}</span>
+                <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">predictions</span>
+            <span class="p">],</span>
+            <span class="s2">&quot;triggers&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">t</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">triggers</span><span class="p">],</span>
+            <span class="s2">&quot;children&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">c</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">children</span><span class="p">],</span>
+        <span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="ResultNode.from_dict">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.results.ResultNode.from_dict">[docs]</a>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">from_dict</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">d</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;ResultNode&quot;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+            <span class="n">model</span><span class="o">=</span><span class="n">d</span><span class="p">[</span><span class="s2">&quot;model&quot;</span><span class="p">],</span>
+            <span class="n">source_path</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="n">d</span><span class="p">[</span><span class="s2">&quot;source_path&quot;</span><span class="p">]),</span>
+            <span class="n">segment_time_range</span><span class="o">=</span><span class="nb">tuple</span><span class="p">(</span><span class="n">d</span><span class="p">[</span><span class="s2">&quot;segment_time_range&quot;</span><span class="p">]),</span>  <span class="c1"># type: ignore[arg-type]</span>
+            <span class="n">predictions</span><span class="o">=</span><span class="p">[</span>
+                <span class="n">Prediction</span><span class="p">(</span>
+                    <span class="n">label</span><span class="o">=</span><span class="n">p</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">],</span>
+                    <span class="n">score</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="n">p</span><span class="p">[</span><span class="s2">&quot;score&quot;</span><span class="p">]),</span>
+                    <span class="n">time_range</span><span class="o">=</span><span class="nb">tuple</span><span class="p">(</span><span class="n">p</span><span class="p">[</span><span class="s2">&quot;time_range&quot;</span><span class="p">]),</span>
+                <span class="p">)</span>
+                <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">d</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;predictions&quot;</span><span class="p">,</span> <span class="p">[])</span>
+            <span class="p">],</span>
+            <span class="n">triggers</span><span class="o">=</span><span class="p">[</span><span class="n">Trigger</span><span class="o">.</span><span class="n">from_dict</span><span class="p">(</span><span class="n">t</span><span class="p">)</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">d</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;triggers&quot;</span><span class="p">,</span> <span class="p">[])],</span>
+            <span class="n">children</span><span class="o">=</span><span class="p">[</span><span class="bp">cls</span><span class="o">.</span><span class="n">from_dict</span><span class="p">(</span><span class="n">c</span><span class="p">)</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">d</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;children&quot;</span><span class="p">,</span> <span class="p">[])],</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="ResultNode.save">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.results.ResultNode.save">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">indent</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Persist this tree to ``path`` as JSON. Returns the resolved path.&quot;&quot;&quot;</span>
+        <span class="n">path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+        <span class="n">path</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">payload</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">to_dict</span><span class="p">(),</span> <span class="n">indent</span><span class="o">=</span><span class="n">indent</span><span class="p">)</span>
+        <span class="n">path</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="n">payload</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">path</span></div>
+
+
+<div class="viewcode-block" id="ResultNode.load">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.results.ResultNode.load">[docs]</a>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">load</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;ResultNode&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Load a tree previously written by :meth:`save`.&quot;&quot;&quot;</span>
+        <span class="n">path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+        <span class="k">with</span> <span class="n">path</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="s2">&quot;r&quot;</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">cls</span><span class="o">.</span><span class="n">from_dict</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">f</span><span class="p">))</span></div>
+
+
+    <span class="c1"># ----- summaries ---------------------------------------------------</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">start</span><span class="p">,</span> <span class="n">end</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">segment_time_range</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;ResultNode(model=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="si">!r}</span><span class="s2">, &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;range=[</span><span class="si">{</span><span class="n">start</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">-</span><span class="si">{</span><span class="n">end</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">s], &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;predictions=</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">predictions</span><span class="p">)</span><span class="si">}</span><span class="s2">, &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;children=</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">children</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span>
+        <span class="p">)</span></div>
+
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># Human-readable rendering</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+
+<div class="viewcode-block" id="render">
+<a class="viewcode-back" href="../../source/classpatch.html#classpatch.results.render">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">render</span><span class="p">(</span>
+    <span class="n">node</span><span class="p">:</span> <span class="n">ResultNode</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">top_k</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="mi">5</span><span class="p">,</span>
+    <span class="n">score_floor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Render a result tree as a human-readable indented string.</span>
+
+<span class="sd">    ``top_k`` and ``score_floor`` control how many predictions are shown</span>
+<span class="sd">    *per chunk* in the printout — they don&#39;t change the underlying tree.</span>
+<span class="sd">    Pass ``top_k=None`` to print every prediction above ``score_floor``.</span>
+
+<span class="sd">    Children are attached underneath the chunk in their parent that triggered</span>
+<span class="sd">    them, so the routing flow reads top-to-bottom and left-to-right::</span>
+
+<span class="sd">        sslam [0.0-1800.0s]</span>
+<span class="sd">          [0.0-10.0s] Speech 0.852, Vehicle 0.490, ...</span>
+<span class="sd">          [10.0-20.0s] Bird 0.710, ...</span>
+<span class="sd">            birdnet [10.0-20.0s]  &lt;- sslam Bird 0.71</span>
+<span class="sd">              [12.0-15.0s] Northern Cardinal 0.830</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">lines</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">_render_into</span><span class="p">(</span>
+        <span class="n">node</span><span class="p">,</span>
+        <span class="n">lines</span><span class="p">,</span>
+        <span class="n">indent</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+        <span class="n">top_k</span><span class="o">=</span><span class="n">top_k</span><span class="p">,</span>
+        <span class="n">score_floor</span><span class="o">=</span><span class="n">score_floor</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">lines</span><span class="p">)</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_render_into</span><span class="p">(</span>
+    <span class="n">node</span><span class="p">:</span> <span class="n">ResultNode</span><span class="p">,</span>
+    <span class="n">lines</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">indent</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">top_k</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">score_floor</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">pad</span> <span class="o">=</span> <span class="s2">&quot;  &quot;</span> <span class="o">*</span> <span class="n">indent</span>
+    <span class="n">start</span><span class="p">,</span> <span class="n">end</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">segment_time_range</span>
+
+    <span class="n">trigger_info</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">triggers</span><span class="p">:</span>
+        <span class="n">bits</span> <span class="o">=</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">t</span><span class="o">.</span><span class="n">from_model</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">t</span><span class="o">.</span><span class="n">label</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">t</span><span class="o">.</span><span class="n">score</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">triggers</span><span class="p">)</span>
+        <span class="n">trigger_info</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;  &lt;- </span><span class="si">{</span><span class="n">bits</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">pad</span><span class="si">}{</span><span class="n">node</span><span class="o">.</span><span class="n">model</span><span class="si">}</span><span class="s2"> [</span><span class="si">{</span><span class="n">start</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">-</span><span class="si">{</span><span class="n">end</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">s]</span><span class="si">{</span><span class="n">trigger_info</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="n">chunks</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">predictions_by_chunk</span><span class="p">()</span>
+
+    <span class="n">children_by_chunk</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="n">ResultNode</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">child</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">children</span><span class="p">:</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="n">child</span><span class="o">.</span><span class="n">triggers</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">time_range</span> <span class="k">if</span> <span class="n">child</span><span class="o">.</span><span class="n">triggers</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="n">children_by_chunk</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">child</span><span class="p">)</span>
+
+    <span class="n">rendered_chunks</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">chunk_range</span><span class="p">,</span> <span class="n">preds</span> <span class="ow">in</span> <span class="n">chunks</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="n">filtered</span> <span class="o">=</span> <span class="p">[</span><span class="n">p</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">preds</span> <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">score</span> <span class="o">&gt;=</span> <span class="n">score_floor</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">top_k</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">filtered</span> <span class="o">=</span> <span class="n">filtered</span><span class="p">[:</span><span class="n">top_k</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">filtered</span><span class="p">:</span>
+            <span class="n">cs</span><span class="p">,</span> <span class="n">ce</span> <span class="o">=</span> <span class="n">chunk_range</span>
+            <span class="n">label_str</span> <span class="o">=</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">p</span><span class="o">.</span><span class="n">label</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">p</span><span class="o">.</span><span class="n">score</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">filtered</span><span class="p">)</span>
+            <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">pad</span><span class="si">}</span><span class="s2">  [</span><span class="si">{</span><span class="n">cs</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">-</span><span class="si">{</span><span class="n">ce</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">s] </span><span class="si">{</span><span class="n">label_str</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">child</span> <span class="ow">in</span> <span class="n">children_by_chunk</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">chunk_range</span><span class="p">,</span> <span class="p">[]):</span>
+            <span class="n">_render_into</span><span class="p">(</span>
+                <span class="n">child</span><span class="p">,</span>
+                <span class="n">lines</span><span class="p">,</span>
+                <span class="n">indent</span><span class="o">=</span><span class="n">indent</span> <span class="o">+</span> <span class="mi">2</span><span class="p">,</span>
+                <span class="n">top_k</span><span class="o">=</span><span class="n">top_k</span><span class="p">,</span>
+                <span class="n">score_floor</span><span class="o">=</span><span class="n">score_floor</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="n">rendered_chunks</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">chunk_range</span><span class="p">)</span>
+
+    <span class="c1"># Children whose triggering chunk wasn&#39;t in this node&#39;s predictions (rare,</span>
+    <span class="c1"># but possible if a custom executor pre-filters predictions). Print them</span>
+    <span class="c1"># below the chunks rather than dropping them silently.</span>
+    <span class="k">for</span> <span class="n">chunk_range</span><span class="p">,</span> <span class="n">orphan_list</span> <span class="ow">in</span> <span class="n">children_by_chunk</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="k">if</span> <span class="n">chunk_range</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">cs</span><span class="p">,</span> <span class="n">ce</span> <span class="o">=</span> <span class="n">chunk_range</span>
+            <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">pad</span><span class="si">}</span><span class="s2">  [</span><span class="si">{</span><span class="n">cs</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">-</span><span class="si">{</span><span class="n">ce</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">s] (no surviving predictions)&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">child</span> <span class="ow">in</span> <span class="n">orphan_list</span><span class="p">:</span>
+            <span class="n">_render_into</span><span class="p">(</span>
+                <span class="n">child</span><span class="p">,</span>
+                <span class="n">lines</span><span class="p">,</span>
+                <span class="n">indent</span><span class="o">=</span><span class="n">indent</span> <span class="o">+</span> <span class="mi">2</span><span class="p">,</span>
+                <span class="n">top_k</span><span class="o">=</span><span class="n">top_k</span><span class="p">,</span>
+                <span class="n">score_floor</span><span class="o">=</span><span class="n">score_floor</span><span class="p">,</span>
+            <span class="p">)</span>
+
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s2">&quot;ResultNode&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;ResultRow&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;Trigger&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;render&quot;</span><span class="p">,</span>
+<span class="p">]</span>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">ClassPatch</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2026, Will.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

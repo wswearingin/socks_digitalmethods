@@ -1,0 +1,37 @@
+classpatch.models package
+=========================
+
+Submodules
+----------
+
+classpatch.models.audioset\_vocab module
+----------------------------------------
+
+.. automodule:: classpatch.models.audioset_vocab
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+classpatch.models.sslam module
+------------------------------
+
+.. automodule:: classpatch.models.sslam
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+classpatch.models.stub module
+-----------------------------
+
+.. automodule:: classpatch.models.stub
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+Module contents
+---------------
+
+.. automodule:: classpatch.models
+   :members:
+   :show-inheritance:
+   :undoc-members:
